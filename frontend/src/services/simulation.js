@@ -25,7 +25,7 @@ export class GPSSimulator {
   }
   
   // FIX: Added 'actualPosition' argument so the red car moves along the route
-  updatePosition(actualPosition, riskLevel) {
+  updatePosition(actualPosition) {
     if (this.gpsActive) {
       this.position = actualPosition
       return this.position

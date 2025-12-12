@@ -24,6 +24,7 @@ const ControlPanel = ({
   onSetEndPoint,
   startPoint,
   endPoint,
+  onClearPoints,
   onUseDemoRoute
 }) => {
   return (
@@ -132,9 +133,7 @@ const ControlPanel = ({
 <div className="flex gap-2 pt-2">
   <button
     onClick={() => {
-      setStartPoint(null);
-      setEndPoint(null);
-      setRoutes({});
+      onClearPoints();
     }}
     className="flex-1 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
   >

@@ -32,7 +32,6 @@ function App() {
   // Refs
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
-  const animationFrameRef = useRef(null)
   
   // Initialize
   useEffect(() => {
@@ -43,14 +42,10 @@ function App() {
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
-    
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-    }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  
+
   // Fetch space weather data
   const fetchSpaceWeather = async () => {
     try {
@@ -144,10 +139,10 @@ const handleMapClick = (coords) => {
   
   if (activePointType === 'start') {
     setStartPoint(coords);
-    showNotification('Start point set!');
+    console.log('Start point set!');
   } else {
     setEndPoint(coords);
-    showNotification('End point set!');
+    console.log('End point set!');
     // Calculate route if both points exist
     if (startPoint) {
       calculateRoute(startPoint, coords, currentRouteMode);

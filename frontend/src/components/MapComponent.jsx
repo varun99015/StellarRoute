@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { calculateBoundingBox } from '../services/api'
 import { RISK_LEVELS } from '../utils/constants'
 
 // Custom vehicle icon
@@ -14,10 +13,10 @@ const createVehicleIcon = (gpsActive) => {
             <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
           </svg>
         </div>
-        ${!gpsActive && `
+        ${!gpsActive ? `
           <div class="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full animate-pulse border border-white"></div>
           <div class="absolute -top-2 -right-2 w-4 h-4 bg-red-500 rounded-full animate-ping border border-white"></div>
-        `}
+        ` : ''}
       </div>
     `,
     className: 'vehicle-marker',
@@ -74,19 +73,12 @@ const MapComponent = ({
   onBoundsChange = () => {}
 }) => {
   const mapRef = useRef(null)
-  const [mapBounds, setMapBounds] = useState(null)
   
   useEffect(() => {
     if (mapRef.current) {
       const map = mapRef.current
       const updateBounds = () => {
         const bounds = map.getBounds()
-        setMapBounds([
-          bounds.getWest(),
-          bounds.getSouth(),
-          bounds.getEast(),
-          bounds.getNorth()
-        ])
         onBoundsChange([
           bounds.getWest(),
           bounds.getSouth(),
@@ -223,13 +215,9 @@ const MapComponent = ({
         
         <MapController center={center} zoom={zoom} />
         
-        {/* Heatmap Overlay */}
         {renderHeatmap()}
-        
-        {/* Routes */}
         {renderRoutes()}
         
-        {/* Start Point */}
         {startPoint && (
           <Marker 
             position={startPoint}
@@ -247,7 +235,6 @@ const MapComponent = ({
           </Marker>
         )}
         
-        {/* End Point */}
         {endPoint && (
           <Marker 
             position={endPoint}
@@ -265,7 +252,6 @@ const MapComponent = ({
           </Marker>
         )}
         
-        {/* Vehicle Marker */}
         {vehiclePosition && (
           <Marker 
             position={vehiclePosition}
@@ -290,7 +276,6 @@ const MapComponent = ({
         )}
       </MapContainer>
       
-      {/* Map Controls Overlay */}
       <div className="absolute top-4 left-4 glass-card p-3 rounded-lg">
         <div className="text-sm font-medium text-gray-700">Map Controls</div>
         <div className="flex gap-2 mt-2">
@@ -315,7 +300,6 @@ const MapComponent = ({
         </div>
       </div>
       
-      {/* Legend */}
       <div className="absolute bottom-4 left-4 glass-card p-3 rounded-lg">
         <div className="text-sm font-medium text-gray-700 mb-2">Map Legend</div>
         <div className="space-y-1">

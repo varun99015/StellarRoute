@@ -24,7 +24,7 @@ export class GPSSimulator {
     }
   }
   
-  updatePosition(routeIndex, totalPoints, riskLevel) {
+  updatePosition() {
     if (this.gpsActive) {
       return this.position
     }
