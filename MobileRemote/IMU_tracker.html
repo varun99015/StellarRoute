@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StellarRoute Sensor</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0; /* Hacker Green */
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 2px solid #0f0;
+            padding-bottom: 10px;
+        }
+
+        .data-display {
+            font-size: 18px;
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #333;
+            width: 80%;
+            border-radius: 8px;
+            background: rgba(0, 255, 0, 0.05);
+        }
+
+        .value {
+            font-weight: bold;
+            color: #fff;
+            font-size: 24px;
+        }
+
+        #connect-btn {
+            background-color: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 15px #0f0;
+            animation: pulse 2s infinite;
+        }
+
+        #connect-btn:active {
+            transform: scale(0.95);
+        }
+
+        .status-indicator {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .active {
+            color: #0f0;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 10px #0f0; }
+            50% { box-shadow: 0 0 25px #0f0; }
+            100% { box-shadow: 0 0 10px #0f0; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🛰️ Sensor Uplink</h1>
+
+    <button id="connect-btn" onclick="requestPermission()">INITIALIZE SENSORS</button>
+
+    <div class="data-display" id="data-panel" style="display:none;">
+        <p>TILT X (Steering): <br><span id="tilt-x" class="value">0</span>°</p>
+        <p>TILT Y (Speed): <br><span id="tilt-y" class="value">0</span>°</p>
+    </div>
+
+    <div class="status-indicator">
+        STATUS: <span id="status-text">DISCONNECTED</span>
+    </div>
+
+    <script type="module">
+        // --------------------------------------------------------------
+        // 1. FIREBASE SETUP (REPLACE WITH YOUR KEYS)
+        // --------------------------------------------------------------
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        // Make these globally accessible for the non-module script functions
+        window.db = db;
+        window.set = set;
+        window.ref = ref;
+    </script>
+
+    <script>
+        // --------------------------------------------------------------
+        // 2. SENSOR LOGIC
+        // --------------------------------------------------------------
+        
+        function requestPermission() {
+            // iOS 13+ requires explicit permission
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            startSensors();
+                        } else {
+                            alert("Permission denied. Enable Motion Sensors in Settings.");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Android / non-iOS 13+ devices
+                startSensors();
+            }
+        }
+
+        function startSensors() {
+            // Hide button, show data
+            document.getElementById("connect-btn").style.display = "none";
+            document.getElementById("data-panel").style.display = "block";
+            document.getElementById("status-text").innerText = "TRANSMITTING...";
+            document.getElementById("status-text").classList.add("active");
+
+            // Listen to device orientation
+            window.addEventListener("deviceorientation", handleOrientation);
+        }
+
+        let lastUpdate = 0;
+
+        function handleOrientation(event) {
+            const now = Date.now();
+            
+            // Throttle data sending to every 50ms (20 times/sec) to save bandwidth
+            if (now - lastUpdate > 50) {
+                lastUpdate = now;
+
+                // Get values
+                // Beta: Front-to-Back Tilt (-180 to 180) -> Speed
+                // Gamma: Left-to-Right Tilt (-90 to 90) -> Steering
+                const tiltX = Math.round(event.gamma); // Steering
+                const tiltY = Math.round(event.beta);  // Speed/Forward
+
+                // Update Screen UI
+                document.getElementById("tilt-x").innerText = tiltX;
+                document.getElementById("tilt-y").innerText = tiltY;
+
+                // Send to Firebase
+                // We overwrite the 'vehicle_control' node constantly
+                if (window.set && window.ref && window.db) {
+                    window.set(window.ref(window.db, 'vehicle_control'), {
+                        tilt_x: tiltX,
+                        tilt_y: tiltY,
+                        timestamp: now
+                    });
+                }
+            }
+        }
+    </script>
+</body>
+</html>
