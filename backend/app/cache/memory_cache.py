@@ -6,7 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class MemoryCache:
-    """Simple in-memory cache"""
+    """Simple in-memory cache with wildcard support"""
     
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
@@ -31,8 +31,20 @@ class MemoryCache:
             }
     
     async def delete(self, key: str):
+        """Delete a key. Supports wildcards (e.g., 'prefix_*')"""
         async with self._lock:
-            if key in self._cache:
+            # Handle wildcard deletion
+            if key.endswith('*'):
+                prefix = key[:-1]
+                # Find all keys matching the prefix
+                keys_to_remove = [k for k in self._cache if k.startswith(prefix)]
+                count = 0
+                for k in keys_to_remove:
+                    del self._cache[k]
+                    count += 1
+                logger.info(f"Cache wildcard delete: Removed {count} keys for pattern '{key}'")
+            # Handle exact key deletion
+            elif key in self._cache:
                 del self._cache[key]
     
     async def clear(self):
