@@ -151,13 +151,42 @@ const MapComponent = ({
   const renderRoutes = () => {
     const elements = []
     
+    // 1. Render DRIFTED Route (The "False" GPS path) - Render first so it's below
+    if (routes.drifted?.path) {
+      elements.push(
+        <Polyline
+          key="drifted-route"
+          positions={routes.drifted.path}
+          pathOptions={{
+            color: '#ef4444', // Red
+            weight: 4,
+            opacity: 0.5,
+            dashArray: '5, 10'
+          }}
+        >
+          <Popup>
+            <div className="p-2">
+              <div className="font-semibold text-red-600">⚠️ SIMULATED GPS DRIFT</div>
+              <div className="text-sm text-gray-600 mt-1">
+                This is where the GPS <i>thinks</i> you are.
+              </div>
+              <div className="text-sm text-gray-600">
+                Deviation caused by solar storm (Kp {routes.drifted.kp_index || 'High'}).
+              </div>
+            </div>
+          </Popup>
+        </Polyline>
+      )
+    }
+
+    // 2. Render NORMAL Route (The "True" Road path)
     if (routes.normal?.path) {
       elements.push(
         <Polyline
           key="normal-route"
           positions={routes.normal.path}
           pathOptions={{
-            color: '#2563eb',
+            color: '#2563eb', // Blue
             weight: 5,
             opacity: 0.8,
             dashArray: null
@@ -165,7 +194,7 @@ const MapComponent = ({
         >
           <Popup>
             <div className="p-2">
-              <div className="font-semibold text-blue-600">NORMAL ROUTE</div>
+              <div className="font-semibold text-blue-600">NORMAL ROUTE (ACTUAL)</div>
               <div className="text-sm text-gray-600 mt-1">
                 Distance: {(routes.normal.distance_m / 1000).toFixed(1)}km
               </div>
@@ -178,13 +207,14 @@ const MapComponent = ({
       )
     }
     
+    // 3. Render SAFE Route
     if (routes.safe?.path) {
       elements.push(
         <Polyline
           key="safe-route"
           positions={routes.safe.path}
           pathOptions={{
-            color: '#10b981',
+            color: '#10b981', // Green
             weight: 5,
             opacity: 0.8,
             dashArray: '10, 10'
@@ -205,7 +235,7 @@ const MapComponent = ({
       )
     }
     
-    // Render IMU path
+    // 4. Render IMU path (Purple)
     if (imuPath.length > 0 && useIMUNavigation) {
       elements.push(
         <Polyline
@@ -233,7 +263,7 @@ const MapComponent = ({
       )
     }
     
-    // Render drift path
+    // 5. Render dynamic drift path history (Red dash)
     if (driftPath.length > 1 && !gpsActive) {
       elements.push(
         <Polyline
@@ -248,7 +278,7 @@ const MapComponent = ({
         >
           <Popup>
             <div className="p-2">
-              <div className="font-semibold text-red-600">GPS DRIFT PATH</div>
+              <div className="font-semibold text-red-600">GPS DRIFT TRAIL</div>
               <div className="text-sm text-gray-600 mt-1">
                 Drift distance: ~{Math.round(driftPath.length * 15)}m
               </div>
@@ -384,6 +414,10 @@ const MapComponent = ({
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-blue-600"></div>
             <span>Normal Route</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-0.5 bg-red-500 border-dashed border"></div>
+            <span>Drifted (Simulated)</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-0.5 bg-green-600 border-dashed border"></div>
