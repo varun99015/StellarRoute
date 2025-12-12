@@ -1,16 +1,21 @@
-from pydantic import BaseModel, Field
-from typing import List, Optional, Tuple, Literal, Dict, Any
-from datetime import datetime
+from pydantic import BaseModel
+from typing import List, Tuple, Optional, Dict, Any
 from enum import Enum
+from datetime import datetime
 
 class RiskLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
 
+class SimulationScenario(str, Enum):
+    NORMAL = "normal"
+    MODERATE = "moderate"
+    SEVERE = "severe"
+
 class SpaceWeatherData(BaseModel):
     timestamp: datetime
-    kp_index: float = Field(ge=0, le=9)
+    kp_index: float
     solar_wind_speed: Optional[float] = None
     solar_wind_density: Optional[float] = None
     risk_level: RiskLevel
@@ -18,35 +23,37 @@ class SpaceWeatherData(BaseModel):
     alerts: List[str] = []
     source: str = "NOAA"
 
+class HeatmapRequest(BaseModel):
+    bbox: List[float]  # [min_lon, min_lat, max_lon, max_lat]
+    resolution: float = 0.02
+
 class RouteRequest(BaseModel):
-    start: Tuple[float, float] = Field(..., description="[lat, lng]")
-    end: Tuple[float, float] = Field(..., description="[lat, lng]")
-    mode: Literal["normal", "safe"] = "normal"
+    start: Tuple[float, float]  # [lat, lon]
+    end: Tuple[float, float]    # [lat, lon]
+    mode: str = "normal"        # "normal" or "safe"
 
 class RouteResponse(BaseModel):
-    route_type: str
-    path: List[Tuple[float, float]]
-    distance_m: float
-    estimated_time_s: float
-    total_risk_score: float
-    max_risk_zone: RiskLevel
-    # Remove waypoints or make optional
-    # waypoints: List[Tuple[float, float]] = []  # REMOVE THIS LINE
+    route: Optional[Dict[str, Any]] = None
+    alternatives: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
-class HeatmapRequest(BaseModel):
-    bbox: Tuple[float, float, float, float] = Field(
-        ..., 
-        description="[min_lon, min_lat, max_lon, max_lat]"
-    )
-    resolution: float = 0.1
-    
-class SimulationScenario(str, Enum):
-    NORMAL = "normal"
-    MODERATE = "moderate"
-    SEVERE = "severe"
-    
+class StormSimulationRequest(BaseModel):
+    scenario: SimulationScenario
+    latitude: float
+    longitude: float
+
+class GPSFailureSimulation(BaseModel):
+    risk_level: RiskLevel
+    severity: str = "medium"  # "low", "medium", "high"
+    start_position: Tuple[float, float]
+    duration_seconds: int = 60
+
+class IMUPathRequest(BaseModel):
+    start: Tuple[float, float]
+    end: Tuple[float, float]
+    avoid_high_risk: bool = True
+
 class HealthResponse(BaseModel):
     status: str
-    noaa_api: bool
     timestamp: datetime
-    # Remove cache field since we're using memory cache
+    services: Dict[str, bool]
