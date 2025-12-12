@@ -8,8 +8,17 @@ import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 
+// --- NEW IMPORT ---
+import LoginModal from './components/LoginModal';
+
 function App() {
-  // State
+  // --- AUTHENTICATION STATE (NEW) ---
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [userName, setUserName] = useState(null);
+  // ---------------------------------
+
+  // State (Existing)
   const [spaceWeather, setSpaceWeather] = useState(null)
   const [heatmapData, setHeatmapData] = useState(null)
   const [routes, setRoutes] = useState({})
@@ -18,40 +27,71 @@ function App() {
   const [simulationMode, setSimulationMode] = useState(false)
   const [activePointType, setActivePointType] = useState(null);
 
-  // Map State
+  // Map State (Existing)
   const [mapCenter] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.OAKLAND)
   const [mapBounds, setMapBounds] = useState(null)
-  
-  // Simulation State
+
+  // Simulation State (Existing)
   const [gpsActive, setGPSActive] = useState(true)
   const [vehicleMoving, setVehicleMoving] = useState(false)
   const [vehiclePosition, setVehiclePosition] = useState(null)
-  
-  // Refs
+
+  // Refs (Existing)
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
   const animationFrameRef = useRef(null)
-  
-  // Initialize
+
+  // --- AUTHENTICATION HANDLERS (NEW) ---
+
+  /**
+   * Called by LoginModal on successful OTP verification.
+   * Sets the user's logged-in state and displays their email.
+   */
+  const handleLoginSuccess = (userDisplayName) => {
+    setIsLoggedIn(true);
+    setUserName(userDisplayName); // userDisplayName is the email received from FastAPI
+    setShowLoginModal(false); // Close the modal
+    // If the app needs user-specific data, re-fetch it here
+    // fetchSpaceWeather(); 
+  };
+
+  /**
+   * Clears the session cookie via the backend and resets local state.
+   */
+  const handleLogout = async () => {
+    try {
+      // Use the new logout API function which clears the HttpOnly cookie
+      await stellarRouteAPI.logout();
+    } catch (error) {
+      console.error("Logout failed (server may be unreachable):", error);
+    } finally {
+      // Always clear client state regardless of server response
+      setIsLoggedIn(false);
+      setUserName(null);
+    }
+  };
+  // ------------------------------------
+
+  // Initialize (Existing)
   useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
-    
+
     // Demo: Auto-calculate initial route
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
-    
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
   }, [])
-  
-  // Fetch space weather data
+
+  // Fetch space weather data (Existing)
   const fetchSpaceWeather = async () => {
     try {
       setLoading(true)
@@ -60,7 +100,7 @@ function App() {
         mapCenter[1]
       )
       setSpaceWeather(response.data)
-      
+
       if (mapBounds) {
         fetchHeatmap(mapBounds)
       }
@@ -70,7 +110,7 @@ function App() {
       setLoading(false)
     }
   }
-  
+
   const fetchHeatmap = async (bounds) => {
     try {
       const response = await stellarRouteAPI.getHeatmap(bounds, 0.05)
@@ -79,32 +119,32 @@ function App() {
       console.error('Error fetching heatmap:', error)
     }
   }
-  
+
   const calculateRoute = async (start, end, mode = 'normal') => {
     try {
       setLoading(true)
       const response = await stellarRouteAPI.calculateRoute(start, end, mode)
       const data = response.data
-      
+
       setRoutes(data.alternatives || {})
       setCurrentRouteMode(mode)
-      
+
       const routePath = data.route?.path || [start, end]
       vehicleAnimatorRef.current = new VehicleAnimator(routePath)
       setVehiclePosition(routePath[0])
-      
+
       // Reset GPS simulator
       gpsSimulatorRef.current = new GPSSimulator(routePath[0])
       setGPSActive(true)
       setVehicleMoving(false)
-      
+
     } catch (error) {
       console.error('Error calculating route:', error)
     } finally {
       setLoading(false)
     }
   }
-  
+
   const simulateStorm = async (scenario) => {
     try {
       setLoading(true)
@@ -113,21 +153,21 @@ function App() {
         mapCenter[0],
         mapCenter[1]
       )
-      
+
       setSpaceWeather(response.data)
       setSimulationMode(true)
-      
+
       if (startPoint && endPoint) {
         calculateRoute(startPoint, endPoint, currentRouteMode)
       }
-      
+
     } catch (error) {
       console.error('Error simulating storm:', error)
     } finally {
       setLoading(false)
     }
   }
-  
+
   const stopSimulation = async () => {
     try {
       await stellarRouteAPI.stopSimulation()
@@ -137,51 +177,49 @@ function App() {
       console.error('Error stopping simulation:', error)
     }
   }
-  
 
-const handleMapClick = (coords) => {
-  if (!activePointType) return;
-  
-  if (activePointType === 'start') {
-    setStartPoint(coords);
-    showNotification('Start point set!');
-  } else {
-    setEndPoint(coords);
-    showNotification('End point set!');
-    // Calculate route if both points exist
-    if (startPoint) {
-      calculateRoute(startPoint, coords, currentRouteMode);
+
+  const handleMapClick = (coords) => {
+    if (!activePointType) return;
+
+    if (activePointType === 'start') {
+      setStartPoint(coords);
+      // showNotification('Start point set!'); // Assuming showNotification exists
+    } else {
+      setEndPoint(coords);
+      // showNotification('End point set!'); // Assuming showNotification exists
+
+      if (startPoint) {
+        calculateRoute(startPoint, coords, currentRouteMode);
+      }
     }
-  }
-  
-  setActivePointType(null);
-};
-  
+
+    setActivePointType(null);
+  };
+
   const handleBoundsChange = (bounds) => {
     setMapBounds(bounds)
     fetchHeatmap(bounds)
   }
-  
-  // Toggle GPS failure
+
+  // Toggle GPS failure (Existing)
   const toggleGPSFailure = () => {
     setGPSActive(prev => !prev)
-    // We don't need to manually update position here; the animation loop will handle it
+
     if (gpsActive && gpsSimulatorRef.current) {
-        // Just entering failure mode
-        const riskLevel = spaceWeather?.risk_level || 'medium'
-        gpsSimulatorRef.current.simulateGPSFailure(riskLevel)
+      const riskLevel = spaceWeather?.risk_level || 'medium'
+      gpsSimulatorRef.current.simulateGPSFailure(riskLevel)
     } else if (!gpsActive && gpsSimulatorRef.current) {
-        // Just restoring
-        gpsSimulatorRef.current.restoreGPS()
+      gpsSimulatorRef.current.restoreGPS()
     }
   }
-  
-  // Toggle vehicle movement
+
+  // Toggle vehicle movement (Existing)
   const toggleVehicleMovement = () => {
     setVehicleMoving(prev => !prev)
   }
-  
-  // FIX: Use useEffect for the Animation Loop to avoid stale state
+
+  // Animation Loop (Existing)
   useEffect(() => {
     let animationId;
 
@@ -189,20 +227,19 @@ const handleMapClick = (coords) => {
       if (vehicleAnimatorRef.current) {
         // 1. Update REAL position based on route
         const actualPosition = vehicleAnimatorRef.current.update()
-        
+
         let displayPosition = actualPosition
-        
+
         // 2. Apply GPS drift if GPS is inactive
-        // FIX: Pass actualPosition to simulator so red car moves along route
         if (!gpsActive && gpsSimulatorRef.current) {
           displayPosition = gpsSimulatorRef.current.updatePosition(
             actualPosition,
             spaceWeather?.risk_level
           )
         }
-        
+
         setVehiclePosition(displayPosition)
-        
+
         // 3. Continue loop if still moving
         if (vehicleAnimatorRef.current.isMoving) {
           animationId = requestAnimationFrame(animate)
@@ -223,24 +260,24 @@ const handleMapClick = (coords) => {
     return () => {
       if (animationId) cancelAnimationFrame(animationId)
     }
-  }, [vehicleMoving, gpsActive, spaceWeather]) // Re-run if these change
+  }, [vehicleMoving, gpsActive, spaceWeather])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
     setGPSActive(true)
     setVehiclePosition(startPoint)
     stopSimulation() // Ensure backend simulation stops too
-    
+
     if (gpsSimulatorRef.current) {
       gpsSimulatorRef.current.reset()
     }
-    
+
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
       vehicleAnimatorRef.current = new VehicleAnimator([startPoint, endPoint])
     }
   }
-  
+
   const useDemoRoute = (routeName) => {
     let start, end
     switch (routeName) {
@@ -263,7 +300,7 @@ const handleMapClick = (coords) => {
     setEndPoint(end)
     calculateRoute(start, end, currentRouteMode)
   }
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
@@ -279,7 +316,7 @@ const handleMapClick = (coords) => {
                 <p className="text-sm text-gray-600">Space-weather aware navigation system</p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -293,7 +330,28 @@ const handleMapClick = (coords) => {
                   </span>
                 </div>
               </div>
-              
+
+              {/* AUTHENTICATION LOGIC START: Login/Logout Buttons */}
+              {isLoggedIn ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">Hi, {userName || 'User'}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition-colors"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Login (Challenge)
+                </button>
+              )}
+              {/* AUTHENTICATION LOGIC END */}
+
               <button
                 onClick={resetSimulation}
                 className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
@@ -304,7 +362,7 @@ const handleMapClick = (coords) => {
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -316,7 +374,7 @@ const handleMapClick = (coords) => {
               simulationMode={simulationMode}
               loading={loading}
             />
-            
+
             <ControlPanel
               routeMode={currentRouteMode}
               onRouteModeChange={(mode) => {
@@ -335,7 +393,7 @@ const handleMapClick = (coords) => {
               onUseDemoRoute={useDemoRoute}
             />
           </div>
-          
+
           <div className="lg:col-span-2">
             <div className="h-[600px] rounded-xl overflow-hidden shadow-xl">
               <MapComponent
@@ -351,7 +409,7 @@ const handleMapClick = (coords) => {
                 onBoundsChange={handleBoundsChange}
               />
             </div>
-            
+
             <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -367,7 +425,7 @@ const handleMapClick = (coords) => {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="text-sm text-gray-600">
                   {vehiclePosition && (
                     <span>Vehicle: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>
@@ -375,7 +433,7 @@ const handleMapClick = (coords) => {
                 </div>
               </div>
             </div>
-            
+
             <div className="mt-6">
               <RouteComparison
                 routes={routes}
@@ -391,7 +449,7 @@ const handleMapClick = (coords) => {
           </div>
         </div>
       </main>
-      
+
       <footer className="mt-8 border-t bg-white py-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -399,7 +457,7 @@ const handleMapClick = (coords) => {
               <p className="font-medium">StellarRoute - Hackathon Project</p>
               <p className="text-sm">Space-weather aware navigation with GPS failure resilience</p>
             </div>
-            
+
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-500">
                 Backend: {import.meta.env.VITE_API_URL || 'http://localhost:8000'}
@@ -412,9 +470,13 @@ const handleMapClick = (coords) => {
               </button>
             </div>
           </div>
+          <div className="text-xs text-center text-gray-400 mt-4">
+            Note: Login status is controlled by the HttpOnly session cookie set by FastAPI.
+          </div>
         </div>
       </footer>
-      
+
+      {/* Loading Spinner */}
       {loading && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-2xl">
@@ -422,8 +484,17 @@ const handleMapClick = (coords) => {
               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
               <span className="font-medium">Loading...</span>
             </div>
+
           </div>
         </div>
+      )}
+
+      {/* Login Modal Render */}
+      {showLoginModal && (
+        <LoginModal
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={handleLoginSuccess}
+        />
       )}
     </div>
   )
