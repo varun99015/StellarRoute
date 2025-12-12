@@ -8,8 +8,16 @@ import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 
+// --- NEW IMPORT (Auth) ---
+import LoginModal from './components/LoginModal';
+
 function App() {
-  // State
+  // --- AUTHENTICATION STATE ---
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [userName, setUserName] = useState(null);
+  
+  // --- CORE STATE ---
   const [spaceWeather, setSpaceWeather] = useState(null)
   const [heatmapData, setHeatmapData] = useState(null)
   const [routes, setRoutes] = useState({})
@@ -20,41 +28,60 @@ function App() {
   const [imuPath, setImuPath] = useState([])
   const [driftPath, setDriftPath] = useState([])
 
-  // Map State
+  // --- MAP STATE ---
   const [mapCenter] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.OAKLAND)
   const [mapBounds, setMapBounds] = useState(null)
-  
-  // Simulation State
+
+  // --- SIMULATION STATE ---
   const [gpsActive, setGPSActive] = useState(true)
   const [vehicleMoving, setVehicleMoving] = useState(false)
   const [vehiclePosition, setVehiclePosition] = useState(null)
   const [useIMUNavigation, setUseIMUNavigation] = useState(false)
   
-  // Refs
+  // --- REFS ---
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
   const imuNavigatorRef = useRef(null)
   const animationFrameRef = useRef(null)
   const lastPositionRef = useRef(null) 
-  
-  // Initialize
+
+  // --- AUTHENTICATION HANDLERS ---
+  const handleLoginSuccess = (userDisplayName) => {
+    setIsLoggedIn(true);
+    setUserName(userDisplayName); 
+    setShowLoginModal(false); 
+  };
+
+  const handleLogout = async () => {
+    try {
+      await stellarRouteAPI.logout();
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setIsLoggedIn(false);
+      setUserName(null);
+    }
+  };
+
+  // --- INITIALIZATION ---
   useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
     imuNavigatorRef.current = new IMUNavigator(startPoint)
     
+    // Auto-start demo route
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
-    
+
     return () => {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
     }
   }, [])
-  
-  // ... (Keep fetchSpaceWeather, fetchHeatmap as is) ...
+
+  // --- API CALLS ---
   const fetchSpaceWeather = async () => {
     try {
       setLoading(true)
@@ -82,20 +109,17 @@ function App() {
       setLoading(true)
       const response = await stellarRouteAPI.calculateRoute(start, end, mode)
       const data = response.data
-      
+
       setRoutes(data.alternatives || {})
       setCurrentRouteMode(mode)
-      
+
       const routePath = data.route?.path || [start, end]
       
-      // If we are NOT currently moving, reset vehicle to start
+      // If NOT currently moving, reset vehicle to start
       if (!vehicleMoving) {
         vehicleAnimatorRef.current = new VehicleAnimator(routePath)
         setVehiclePosition(routePath[0])
         lastPositionRef.current = routePath[0]
-      } else {
-        // If we ARE moving, we need to handle dynamic rerouting (advanced)
-        // For now, let's just let the current animation finish or reset if needed
       }
       
       if (start && end) calculateIMUPath(start, end)
@@ -119,7 +143,6 @@ function App() {
     }
   }
 
-  // ... (Keep simulateStorm, handleMapClick as is) ...
   const simulateStorm = async (scenario) => {
     try {
       setLoading(true)
@@ -129,7 +152,18 @@ function App() {
       if (startPoint && endPoint) calculateRoute(startPoint, endPoint, currentRouteMode)
     } catch (error) { console.error(error); setLoading(false) }
   }
+  
+  const stopSimulation = async () => {
+    try {
+      await stellarRouteAPI.stopSimulation()
+      setSimulationMode(false)
+      fetchSpaceWeather()
+    } catch (error) {
+      console.error('Error stopping simulation:', error)
+    }
+  }
 
+  // --- MAP INTERACTION ---
   const handleMapClick = (coords) => {
     if (!activePointType) return;
     if (activePointType === 'start') {
@@ -144,16 +178,12 @@ function App() {
     setActivePointType(null)
   }
 
-  const showNotification = (message) => {
-    // ... (same as before) ...
-  }
-  
   const handleBoundsChange = (bounds) => {
     setMapBounds(bounds)
     fetchHeatmap(bounds)
   }
 
-  // Helper to find closest point index on a path
+  // --- SIMULATION LOGIC ---
   const findClosestPathIndex = (position, path) => {
     if (!position || !path || path.length === 0) return 0
     let minDist = Infinity
@@ -172,27 +202,21 @@ function App() {
     return closestIndex
   }
 
-  // Toggle GPS failure
   const toggleGPSFailure = () => {
     const newGPSState = !gpsActive
     setGPSActive(newGPSState)
     
-    // Get current vehicle position
     const currentPos = vehiclePosition || startPoint
     lastPositionRef.current = currentPos 
     
     if (newGPSState === false) {
-      // --- ENTERING FAILURE MODE ---
-      
+      // ENTERING FAILURE MODE
       const riskLevel = spaceWeather?.risk_level || 'medium'
       const driftSeverity = (spaceWeather?.kp_index || 0) < 4 ? 'low' : (spaceWeather?.kp_index || 0) < 7 ? 'medium' : 'high'
       
-      // 1. Initialize GPS Simulator (for random drift)
       gpsSimulatorRef.current = new GPSSimulator(currentPos)
       gpsSimulatorRef.current.simulateGPSFailure(riskLevel, driftSeverity)
       
-      // 2. Initialize IMU Navigator (for dead reckoning along path)
-      // FIX: Slice the path so we start from where we ARE, not the beginning
       const activePath = imuPath.length > 0 ? imuPath : (routes[currentRouteMode]?.path || [])
       const closestIndex = findClosestPathIndex(currentPos, activePath)
       const remainingPath = activePath.slice(closestIndex)
@@ -204,13 +228,11 @@ function App() {
       setUseIMUNavigation(true) 
       
     } else {
-      // --- RESTORING GPS ---
-      
+      // RESTORING GPS
       if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS()
       
-      // Snap back to the "True" position being tracked by the main animator
       if (vehicleAnimatorRef.current) {
-        const truePos = vehicleAnimatorRef.current.update() // Get true pos from animator
+        const truePos = vehicleAnimatorRef.current.update() 
         setVehiclePosition(truePos)
         lastPositionRef.current = truePos
       }
@@ -220,34 +242,35 @@ function App() {
     }
   }
 
-  // Animation loop
+  // Animation Loop
   useEffect(() => {
     let animationId
     const animate = () => {
       if (vehicleAnimatorRef.current && vehicleMoving) {
-        // Always track TRUE position in background
         const actualPosition = vehicleAnimatorRef.current.update()
-        
         let displayPosition = actualPosition
         
         if (!gpsActive) {
           if (useIMUNavigation && imuNavigatorRef.current) {
-             // IMU Mode: Follow the "Dead Reckoning" path (Sliced path)
+             // IMU Mode
              displayPosition = imuNavigatorRef.current.update() 
           } else if (gpsSimulatorRef.current) {
              // Drift Mode
-             displayPosition = gpsSimulatorRef.current.updatePosition()
+             displayPosition = gpsSimulatorRef.current.updatePosition(
+                actualPosition,
+                spaceWeather?.risk_level
+             )
              setDriftPath(prev => [...prev, displayPosition])
           }
         }
-        
+
         setVehiclePosition(displayPosition)
         
         if (vehicleAnimatorRef.current.isMoving) {
           animationId = requestAnimationFrame(animate)
         } else {
           setVehicleMoving(false)
-          if (!gpsActive) showNotification('Journey complete (IMU Mode)')
+          if (!gpsActive) console.log('Journey complete (IMU Mode)') // Replaced showNotification
         }
       }
     }
@@ -261,11 +284,7 @@ function App() {
     }
 
     return () => { if (animationId) cancelAnimationFrame(animationId) }
-  }, [vehicleMoving, gpsActive, useIMUNavigation])
-
-  // ... (Rest of component: resetSimulation, useDemoRoute, render) ...
-  // (Paste the rest of the existing functions here if copying full file, 
-  //  otherwise just replace the toggleGPSFailure and calculateRoute logic)
+  }, [vehicleMoving, gpsActive, useIMUNavigation, spaceWeather])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
@@ -273,6 +292,8 @@ function App() {
     setUseIMUNavigation(false)
     setDriftPath([])
     setVehiclePosition(startPoint)
+    stopSimulation()
+    
     lastPositionRef.current = startPoint
     
     if (gpsSimulatorRef.current) gpsSimulatorRef.current.reset()
@@ -283,9 +304,8 @@ function App() {
       vehicleAnimatorRef.current = new VehicleAnimator(route)
     }
   }
-  
+
   const useDemoRoute = (routeName) => {
-      // ... same as before
     let start, end
     switch (routeName) {
       case 'SF_OAKLAND': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.OAKLAND; break
@@ -298,38 +318,203 @@ function App() {
   }
 
   return (
-    // ... (Keep existing JSX exactly as is) ...
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header */}
       <header className="bg-white shadow-sm border-b">
-         {/* ... Header content ... */}
-         <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Navigation2 className="w-6 h-6 text-primary" />
-              <h1 className="text-2xl font-bold text-gray-900">StellarRoute</h1>
+              <div className="p-2 bg-primary/10 rounded-lg">
+                <Navigation2 className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">StellarRoute</h1>
+                <p className="text-sm text-gray-600">Space-weather aware navigation system</p>
+              </div>
             </div>
+
             <div className="flex items-center gap-4">
-              <button onClick={resetSimulation} className="px-4 py-2 bg-gray-100 rounded-lg">Reset</button>
+              <div className="hidden md:flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Satellite className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium">Backend: Connected</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className={`w-4 h-4 ${spaceWeather?.risk_level === 'high' ? 'text-red-600' : 'text-yellow-600'}`} />
+                  <span className="text-sm">
+                    {spaceWeather ? `Kp: ${spaceWeather.kp_index}` : 'Loading...'}
+                  </span>
+                </div>
+              </div>
+
+              {/* AUTHENTICATION BUTTONS */}
+              {isLoggedIn ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">Hi, {userName || 'User'}</span>
+                  <button
+                    onClick={handleLogout}
+                    className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition-colors"
+                  >
+                    Logout
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  Login (Challenge)
+                </button>
+              )}
+
+              <button
+                onClick={resetSimulation}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+              >
+                Reset Demo
+              </button>
             </div>
           </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <SpaceWeatherPanel spaceWeather={spaceWeather} onRefresh={fetchSpaceWeather} onSimulate={simulateStorm} simulationMode={simulationMode} loading={loading} />
-            <ControlPanel routeMode={currentRouteMode} onRouteModeChange={(mode) => { setCurrentRouteMode(mode); if(startPoint && endPoint) calculateRoute(startPoint, endPoint, mode) }} gpsActive={gpsActive} onGPSFailureToggle={toggleGPSFailure} vehicleMoving={vehicleMoving} onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)} onReset={resetSimulation} onSetPoints={() => setActivePointType('selecting')} onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }} startPoint={startPoint} endPoint={endPoint} onUseDemoRoute={useDemoRoute} />
+            <SpaceWeatherPanel
+              spaceWeather={spaceWeather}
+              onRefresh={fetchSpaceWeather}
+              onSimulate={simulateStorm}
+              simulationMode={simulationMode}
+              loading={loading}
+            />
+
+            <ControlPanel
+              routeMode={currentRouteMode}
+              onRouteModeChange={(mode) => {
+                setCurrentRouteMode(mode)
+                if (startPoint && endPoint) {
+                  calculateRoute(startPoint, endPoint, mode)
+                }
+              }}
+              gpsActive={gpsActive}
+              onGPSFailureToggle={toggleGPSFailure}
+              vehicleMoving={vehicleMoving}
+              onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
+              onReset={resetSimulation}
+              onSetPoints={() => setActivePointType('selecting')}
+              onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
+              startPoint={startPoint}
+              endPoint={endPoint}
+              onUseDemoRoute={useDemoRoute}
+            />
           </div>
+
           <div className="lg:col-span-2">
             <div className="h-[600px] rounded-xl overflow-hidden shadow-xl">
-              <MapComponent center={mapCenter} zoom={12} heatmapData={heatmapData} routes={routes} vehiclePosition={vehiclePosition} startPoint={startPoint} endPoint={endPoint} gpsActive={gpsActive} imuPath={imuPath} driftPath={driftPath} useIMUNavigation={useIMUNavigation} onMapClick={handleMapClick} onBoundsChange={handleBoundsChange} />
+              <MapComponent
+                center={mapCenter}
+                zoom={12}
+                heatmapData={heatmapData}
+                routes={routes}
+                vehiclePosition={vehiclePosition}
+                startPoint={startPoint}
+                endPoint={endPoint}
+                gpsActive={gpsActive}
+                imuPath={imuPath}
+                driftPath={driftPath}
+                useIMUNavigation={useIMUNavigation}
+                onMapClick={handleMapClick}
+                onBoundsChange={handleBoundsChange}
+              />
             </div>
-            {/* ... Status and Comparison ... */}
-            <div className="mt-6"><RouteComparison routes={routes} currentMode={currentRouteMode} onSelectRoute={(mode) => { setCurrentRouteMode(mode); if(startPoint && endPoint) calculateRoute(startPoint, endPoint, mode) }} /></div>
+
+            <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {gpsActive ? 'GPS: Active' : 'GPS: Failed (IMU Active)'}
+                  </div>
+                  <div className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                    {currentRouteMode === 'normal' ? 'Normal Route' : 'Storm-Safe Route'}
+                  </div>
+                  {simulationMode && (
+                    <div className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                      Simulation Active
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-sm text-gray-600">
+                  {vehiclePosition && (
+                    <span>Vehicle: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <RouteComparison
+                routes={routes}
+                currentMode={currentRouteMode}
+                onSelectRoute={(mode) => {
+                  setCurrentRouteMode(mode)
+                  if (startPoint && endPoint) {
+                    calculateRoute(startPoint, endPoint, mode)
+                  }
+                }}
+              />
+            </div>
           </div>
         </div>
       </main>
+
+      <footer className="mt-8 border-t bg-white py-6">
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="text-gray-600">
+              <p className="font-medium">StellarRoute - Hackathon Project</p>
+              <p className="text-sm">Space-weather aware navigation with GPS failure resilience</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-500">
+                Backend: {import.meta.env.VITE_API_URL || 'http://localhost:8000'}
+              </div>
+              <button
+                onClick={() => window.open('http://localhost:8000/docs', '_blank')}
+                className="text-sm text-primary hover:text-primary/80"
+              >
+                API Documentation
+              </button>
+            </div>
+          </div>
+          <div className="text-xs text-center text-gray-400 mt-4">
+            Note: Login status is controlled by the HttpOnly session cookie set by FastAPI.
+          </div>
+        </div>
+      </footer>
+
+      {/* Loading Spinner */}
+      {loading && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              <span className="font-medium">Loading...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login Modal Render */}
+      {showLoginModal && (
+        <LoginModal
+          onClose={() => setShowLoginModal(false)}
+          onSuccess={handleLoginSuccess}
+        />
+      )}
     </div>
   )
 }
