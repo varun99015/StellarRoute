@@ -7,8 +7,6 @@ import RouteComparison from './components/RouteComparison'
 import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
-
-// --- NEW IMPORT (Auth) ---
 import LoginModal from './components/LoginModal';
 
 function App() {
@@ -166,15 +164,26 @@ function App() {
   // --- MAP INTERACTION ---
   const handleMapClick = (coords) => {
     if (!activePointType) return;
+    
     if (activePointType === 'start') {
       setStartPoint(coords)
       setVehiclePosition(coords)
       lastPositionRef.current = coords
-      if (endPoint) calculateRoute(coords, endPoint, currentRouteMode)
+      
+      // If end point exists, recalculate route immediately
+      if (endPoint) {
+        calculateRoute(coords, endPoint, currentRouteMode)
+      }
     } else if (activePointType === 'end') {
       setEndPoint(coords)
-      if (startPoint) calculateRoute(startPoint, coords, currentRouteMode)
+      
+      // If start point exists, recalculate route immediately
+      if (startPoint) {
+        calculateRoute(startPoint, coords, currentRouteMode)
+      }
     }
+    
+    // Turn off selection mode after setting a point
     setActivePointType(null)
   }
 
@@ -270,7 +279,7 @@ function App() {
           animationId = requestAnimationFrame(animate)
         } else {
           setVehicleMoving(false)
-          if (!gpsActive) console.log('Journey complete (IMU Mode)') // Replaced showNotification
+          if (!gpsActive) console.log('Journey complete (IMU Mode)')
         }
       }
     }
@@ -377,6 +386,69 @@ function App() {
           </div>
         </div>
       </header>
+      
+      {/* --- RESTORED POINT SELECTION MODAL --- */}
+      {activePointType === 'selecting' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-bold mb-4 text-gray-800">Set Point on Map</h3>
+            <p className="text-gray-600 mb-6">Choose which point you want to set, then click on the map.</p>
+            
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                onClick={() => setActivePointType('start')}
+                className="p-4 border-2 border-blue-100 bg-blue-50 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-all group"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <div className="p-3 bg-blue-500 rounded-full text-white shadow-md group-hover:scale-110 transition-transform">
+                    <MapPin className="w-6 h-6" />
+                  </div>
+                  <span className="font-semibold text-blue-700">Set Start</span>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => setActivePointType('end')}
+                className="p-4 border-2 border-green-100 bg-green-50 rounded-xl hover:bg-green-100 hover:border-green-300 transition-all group"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <div className="p-3 bg-green-500 rounded-full text-white shadow-md group-hover:scale-110 transition-transform">
+                    <Target className="w-6 h-6" />
+                  </div>
+                  <span className="font-semibold text-green-700">Set End</span>
+                </div>
+              </button>
+            </div>
+            
+            <button
+              onClick={() => setActivePointType(null)}
+              className="w-full py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* VISUAL INDICATOR FOR ACTIVE SELECTION MODE */}
+      {(activePointType === 'start' || activePointType === 'end') && (
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
+          {activePointType === 'start' ? (
+            <MapPin className="w-5 h-5 text-blue-400" />
+          ) : (
+            <Target className="w-5 h-5 text-green-400" />
+          )}
+          <span className="font-medium">
+            Click on map to set {activePointType === 'start' ? 'Start Point' : 'End Point'}
+          </span>
+          <button 
+            onClick={() => setActivePointType(null)}
+            className="ml-2 p-1 hover:bg-white/20 rounded-full"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
@@ -412,7 +484,12 @@ function App() {
           </div>
 
           <div className="lg:col-span-2">
-            <div className="h-[600px] rounded-xl overflow-hidden shadow-xl">
+            <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
+              {/* Map Mask when Selecting */}
+              {activePointType === 'selecting' && (
+                <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />
+              )}
+              
               <MapComponent
                 center={mapCenter}
                 zoom={12}
