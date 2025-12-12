@@ -1,11 +1,16 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, EmailStr
+from jose import jwt, JWTError
 import asyncio
 import logging
 from datetime import datetime
+import random
+import time
 from typing import Dict, Any, List
 
+# Assuming these modules exist in your project structure
 from .models import (
     SpaceWeatherData, 
     RouteRequest, 
@@ -37,11 +42,15 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=origins,       # <-- CHANGED: Replaced ["*"] with explicit origins
+    allow_credentials=True,      # <-- REQUIRED: Stays True for session handling
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -57,6 +66,103 @@ storm_simulator = StormSimulator()
 simulation_mode = False
 current_scenario = SimulationScenario.NORMAL
 active_connections: List[WebSocket] = []
+
+
+# --- AUTHENTICATION CONFIGURATION AND UTILITIES (NEW) ---
+
+# IMPORTANT: Replace this with a strong secret key, preferably from environment variables.
+SECRET_KEY = "your-stellarroute-secret-key-replace-me" 
+ALGORITHM = "HS256"
+SESSION_EXPIRY_SECONDS = 30 * 60 # 30 minutes
+
+# Simulates OTP/User database storage: Key: email, Value: {'otp': str, 'expiry': float}
+OTP_STORE: Dict[str, Dict] = {} 
+
+# --- Pydantic Schemas for Authentication ---
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+class OtpVerification(BaseModel):
+    email: EmailStr
+    otp: str
+
+# --- Authentication Utility Functions ---
+
+def generate_otp(length: int = 6) -> str:
+    """Generates a random N-digit OTP."""
+    return "".join([str(random.randint(0, 9)) for _ in range(length)])
+
+def send_email_otp(email: EmailStr, otp: str):
+    """Simulated email sending function."""
+    logger.info(f"SIMULATED EMAIL: To: {email}, OTP: {otp}")
+    
+def create_session_jwt(email: str) -> str:
+    """Creates a JWT for session tracking."""
+    to_encode = {"sub": email, "exp": time.time() + SESSION_EXPIRY_SECONDS}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# --- AUTHENTICATION ENDPOINTS (NEW) ---
+
+@app.post("/api/auth/request-otp", status_code=status.HTTP_202_ACCEPTED, tags=["Authentication"])
+async def request_otp(request: EmailRequest):
+    """Generates an OTP and simulates sending it to the user's email."""
+    
+    otp_code = generate_otp()
+    
+    # Store OTP with a 5-minute expiry
+    OTP_STORE[request.email] = {
+        "otp": otp_code, 
+        "expiry": time.time() + 300 # 5 minutes
+    }
+    
+    send_email_otp(request.email, otp_code)
+    
+    return {"message": "OTP sent successfully."}
+
+@app.post("/api/auth/verify-otp", tags=["Authentication"])
+async def verify_otp_and_login(request_body: OtpVerification, response: Response):
+    """Verifies the OTP and creates a session cookie on success."""
+    
+    email = request_body.email
+    otp_received = request_body.otp
+    
+    if email not in OTP_STORE:
+        raise HTTPException(status_code=400, detail="OTP session not found or expired. Request a new one.")
+
+    stored_otp_data = OTP_STORE[email]
+    
+    if time.time() > stored_otp_data["expiry"]:
+        del OTP_STORE[email]
+        raise HTTPException(status_code=401, detail="OTP expired. Request a new one.")
+        
+    if otp_received != stored_otp_data["otp"]:
+        raise HTTPException(status_code=401, detail="Invalid OTP.")
+
+    # SUCCESS: Generate Session Token (JWT)
+    session_token = create_session_jwt(email)
+
+    # Set the Session Cookie (HttpOnly and SameSite=Lax are CRUCIAL)
+    response.set_cookie(
+        key="session_id", 
+        value=session_token, 
+        httphonly=True, 
+        max_age=SESSION_EXPIRY_SECONDS, 
+        # secure=True, # Recommended in production (requires HTTPS)
+        samesite="Lax" 
+    )
+    
+    del OTP_STORE[email] # OTP used, delete it
+
+    return {"message": "Login successful. Session created.", "user_email": email}
+
+@app.post("/api/auth/logout", tags=["Authentication"])
+async def logout(response: Response):
+    """Deletes the session cookie to log the user out."""
+    response.delete_cookie(key="session_id")
+    return {"message": "Logout successful"}
+
+
+# --- EXISTING ENDPOINTS (UNCHANGED) ---
 
 @app.get("/", tags=["Root"])
 async def root():
