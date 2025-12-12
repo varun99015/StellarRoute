@@ -1,46 +1,38 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import asyncio
-import logging
 from datetime import datetime
-from typing import Dict, Any, List
+import logging
+import hashlib
+from typing import Dict, Any
 
 from .models import (
-    SpaceWeatherData, 
-    RouteRequest, 
-    RouteResponse,
-    HeatmapRequest,
-    SimulationScenario,
-    HealthResponse
+    SpaceWeatherData, HeatmapRequest, RouteRequest, RouteResponse,
+    StormSimulationRequest, GPSFailureSimulation, IMUPathRequest,
+    HealthResponse, SimulationScenario
 )
 from .services.noaa_service import NOAAWeatherService
 from .services.risk_service import RiskAssessmentService
 from .services.heatmap_service import HeatmapGenerator
-from .services.routing_service import AStarRouter
-from .utils.simulation import StormSimulator
+from .services.routing_service import RoadNetworkRouter
+from .services.simulation import StormSimulator
 from .cache.memory_cache import cache
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
     title="StellarRoute API",
-    description="Space-weather aware navigation system",
-    version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    description="Space-weather aware navigation system with GPS failure resilience",
+    version="2.0.0"
 )
 
-# CORS middleware
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,213 +42,237 @@ app.add_middleware(
 noaa_service = NOAAWeatherService()
 risk_service = RiskAssessmentService()
 heatmap_generator = HeatmapGenerator()
-router = AStarRouter()
+# FIX: Use the RoadNetworkRouter for real roads
+router = RoadNetworkRouter()
 storm_simulator = StormSimulator()
 
-# Global state
-simulation_mode = False
-current_scenario = SimulationScenario.NORMAL
-active_connections: List[WebSocket] = []
+# Store current simulation state
+current_simulation = {
+    "active": False,
+    "scenario": None,
+    "kp_index": None,
+    "latitude": None,
+    "longitude": None
+}
 
-@app.get("/", tags=["Root"])
+@app.get("/")
 async def root():
     return {
-        "message": "Welcome to StellarRoute API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "status": "running"
+        "message": "StellarRoute API v2.0",
+        "status": "operational",
+        "services": {
+            "noaa": "active",
+            "routing": "active",
+            "simulation": "active",
+            "cache": "active"
+        }
     }
 
-@app.get("/api/space-weather/current", response_model=SpaceWeatherData, tags=["Space Weather"])
-async def get_current_space_weather(latitude: float = None, longitude: float = None):
-    """Get current space weather"""
+@app.get("/api/health", response_model=HealthResponse)
+async def health_check():
+    """Check API health and service status"""
     try:
-        if simulation_mode:
-            data = storm_simulator.get_simulated_weather(current_scenario)
-        else:
-            data = await noaa_service.get_current_space_weather()
+        # Test cache
+        cache_status = await cache.ping()
         
-        processed_data = risk_service.process_space_weather_data(data, latitude)
-        await broadcast_update("space_weather_update", processed_data.dict())
-        return processed_data
+        # Test NOAA service
+        noaa_status = True
+        try:
+            await noaa_service.fetch_kp_index()
+        except:
+            noaa_status = False
+            logger.warning("NOAA service check failed")
         
+        return HealthResponse(
+            status="healthy" if cache_status and noaa_status else "degraded",
+            timestamp=datetime.utcnow(),
+            services={
+                "cache": cache_status,
+                "noaa": noaa_status,
+                "routing": True,
+                "simulation": True,
+                "heatmap": True
+            }
+        )
     except Exception as e:
-        logger.error(f"Error fetching space weather: {e}")
+        logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail="Service unavailable")
 
-@app.get("/api/space-weather/simulate", response_model=SpaceWeatherData, tags=["Space Weather"])
-async def simulate_space_weather(
-    scenario: SimulationScenario = SimulationScenario.NORMAL,
-    latitude: float = None,
-    longitude: float = None
-):
-    """Simulate space weather"""
+@app.get("/api/space-weather/current", response_model=SpaceWeatherData)
+async def get_current_space_weather(latitude: float = 37.7749, longitude: float = -122.4194):
+    """Get current space weather data"""
     try:
-        global simulation_mode, current_scenario
-        simulation_mode = True
-        current_scenario = scenario
+        if current_simulation["active"]:
+            scenario_enum = SimulationScenario(current_simulation["scenario"])
+            weather_data = storm_simulator.get_simulated_weather(
+                scenario_enum,
+                latitude,
+                longitude
+            )
+        else:
+            weather_data = await noaa_service.get_current_space_weather()
         
-        data = storm_simulator.get_simulated_weather(scenario)
-        processed_data = risk_service.process_space_weather_data(data, latitude)
-        
-        await broadcast_update("simulation_started", {
-            "scenario": scenario.value,
-            "data": processed_data.dict()
-        })
+        scenario = "simulation" if current_simulation["active"] else "normal"
+        processed_data = risk_service.process_space_weather_data(
+            weather_data,
+            latitude,
+            scenario
+        )
         
         return processed_data
         
     except Exception as e:
-        logger.error(f"Error in simulation: {e}")
+        logger.error(f"Error getting space weather: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/space-weather/stop-simulation", tags=["Space Weather"])
-async def stop_simulation():
-    """Stop simulation"""
-    global simulation_mode
-    simulation_mode = False
-    return {"message": "Simulation stopped", "mode": "real_data"}
-
-@app.get("/api/space-weather/timeline", tags=["Space Weather"])
-async def get_storm_timeline(scenario: SimulationScenario = SimulationScenario.MODERATE):
-    """Get storm timeline"""
-    timeline = storm_simulator.generate_storm_timeline(scenario)
-    return {"scenario": scenario.value, "timeline": timeline}
-
-@app.post("/api/heatmap", tags=["Heatmap"])
-async def get_heatmap(request: HeatmapRequest):
-    """Generate risk heatmap"""
+@app.get("/api/space-weather/simulate")
+async def simulate_storm(scenario: str, latitude: float, longitude: float):
+    """Simulate storm conditions"""
     try:
-        if simulation_mode:
-            kp = storm_simulator.scenarios[current_scenario]["kp_base"]
-        else:
+        try:
+            scenario_enum = SimulationScenario(scenario)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid scenario. Choose from: {', '.join([s.value for s in SimulationScenario])}")
+        
+        current_simulation.update({
+            "active": True,
+            "scenario": scenario,
+            "latitude": latitude,
+            "longitude": longitude
+        })
+        
+        weather_data = storm_simulator.get_simulated_weather(
+            scenario_enum,
+            latitude,
+            longitude
+        )
+        
+        current_simulation["kp_index"] = weather_data.kp_index
+        await cache.delete("route_cache_*") # Clear route cache
+        
+        return weather_data
+        
+    except Exception as e:
+        logger.error(f"Error simulating storm: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/space-weather/stop-simulation")
+async def stop_simulation():
+    """Stop active simulation"""
+    current_simulation.update({
+        "active": False,
+        "scenario": None,
+        "kp_index": None,
+        "latitude": None,
+        "longitude": None
+    })
+    return {"message": "Simulation stopped", "status": "returned_to_real_data"}
+
+@app.get("/api/space-weather/timeline")
+async def get_storm_timeline(scenario: str = "severe"):
+    """Get storm timeline"""
+    try:
+        scenario_enum = SimulationScenario(scenario)
+        timeline = storm_simulator.generate_storm_timeline(scenario_enum)
+        return {
+            "timeline": timeline,
+            "scenario": scenario,
+            "duration_hours": 2
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/heatmap")
+async def get_heatmap(request: HeatmapRequest):
+    """Generate heatmap"""
+    try:
+        kp_index = current_simulation.get("kp_index")
+        if kp_index is None:
             weather_data = await noaa_service.get_current_space_weather()
-            kp = weather_data.kp_index
+            kp_index = weather_data.kp_index
         
-        if request.resolution > 0.5:
-            # Simplified for performance
-            request.resolution = 0.2
-        
-        heatmap = heatmap_generator.generate_heatmap(request, kp)
-        
-        cache_key = f"heatmap_{hash(str(request.dict()))}"
-        await cache.set(cache_key, heatmap, ttl=60)
-        
+        heatmap = heatmap_generator.generate_heatmap(request, kp_index)
         return heatmap
-        
     except Exception as e:
         logger.error(f"Error generating heatmap: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/route", tags=["Routing"])
+@app.post("/api/route")
 async def calculate_route(request: RouteRequest):
-    """Calculate routes"""
+    """Calculate route using OSRM"""
     try:
-        if simulation_mode:
-            kp = storm_simulator.scenarios[current_scenario]["kp_base"]
-        else:
-            weather_data = await noaa_service.get_current_space_weather()
-            kp = weather_data.kp_index
+        cache_key = f"route_cache_{hashlib.md5(str(request.dict()).encode()).hexdigest()}"
+        cached = await cache.get(cache_key)
+        if cached:
+            return cached
         
-        routes = router.find_routes(request, kp)
+        kp_index = current_simulation.get("kp_index", 2.0)
+        scenario = "simulation" if current_simulation["active"] else "normal"
         
-        if not routes:
-            raise HTTPException(status_code=404, detail="No route found")
+        routes = router.find_routes(request, kp_index, scenario)
         
-        route_data = routes.get(request.mode)
-        if not route_data:
-            route_data = routes.get("normal", routes.get("safe"))
-        
-        # TEMPORARY FIX: Return raw data without RouteResponse validation
-        return JSONResponse(
-            content={
-                "route": {
-                    "route_type": request.mode,
-                    "path": route_data.get("path", []),
-                    "distance_m": route_data.get("distance_m", 0),
-                    "estimated_time_s": route_data.get("estimated_time_s", 0),
-                    "total_risk_score": route_data.get("total_risk_score", 0),
-                    "max_risk_zone": route_data.get("max_risk_zone", "low")
-                },
-                "alternatives": routes,
-                "kp_index": kp,
-                "simulation_mode": simulation_mode
-            }
-        )
-        
+        await cache.set(cache_key, routes, ttl=300)
+        return routes
     except Exception as e:
         logger.error(f"Error calculating route: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/health", response_model=HealthResponse, tags=["Health"])
-async def health_check():
-    """Health check"""
+@app.post("/api/imu/path")
+async def calculate_imu_path(request: IMUPathRequest):
+    """Calculate IMU-safe path"""
     try:
-        # Check NOAA API
-        noaa_status = False
-        try:
-            data = await noaa_service.fetch_kp_index()
-            noaa_status = bool(data and len(data) > 0)
-        except Exception as e:
-            logger.error(f"NOAA API check failed: {e}")
-            noaa_status = False
-        
-        return HealthResponse(
-            status="healthy" if noaa_status else "degraded",
-            noaa_api=noaa_status,
-            timestamp=datetime.utcnow()
+        route_request = RouteRequest(
+            start=request.start,
+            end=request.end,
+            mode="safe"
         )
+        kp_index = current_simulation.get("kp_index", 2.0)
+        scenario = "simulation" if current_simulation["active"] else "normal"
         
+        routes = router.find_routes(route_request, kp_index, scenario)
+        alternatives = routes.get("alternatives", {})
+        imu_path = alternatives.get("imu", {})
+        
+        return {
+            "imu_path": imu_path.get("path", []),
+            "distance_m": imu_path.get("distance_m", 0),
+            "estimated_time_s": imu_path.get("estimated_time_s", 0),
+            "risk_score": imu_path.get("total_risk_score", 0),
+            "optimized_for": "imu_navigation"
+        }
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return HealthResponse(
-            status="unhealthy",
-            noaa_api=False,
-            timestamp=datetime.utcnow()
-        )
+        logger.error(f"Error calculating IMU path: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.websocket("/ws/updates")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket for real-time updates"""
-    await websocket.accept()
-    active_connections.append(websocket)
-    
+@app.post("/api/simulation/gps-failure")
+async def simulate_gps_failure(simulation: GPSFailureSimulation):
     try:
-        while True:
-            await asyncio.sleep(30)
-            await websocket.send_json({"type": "ping", "timestamp": datetime.utcnow().isoformat()})
-            
-    except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        result = storm_simulator.simulate_gps_failure(simulation)
+        return {
+            **result,
+            "simulation_type": "gps_failure",
+            "timestamp": datetime.utcnow().isoformat()
+        }
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        if websocket in active_connections:
-            active_connections.remove(websocket)
+        logger.error(f"Error simulating GPS failure: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-async def broadcast_update(event_type: str, data: Dict[str, Any]):
-    """Broadcast to WebSocket clients"""
-    disconnected = []
-    
-    for connection in active_connections:
-        try:
-            await connection.send_json({
-                "type": event_type,
-                "data": data,
-                "timestamp": datetime.utcnow().isoformat()
-            })
-        except:
-            disconnected.append(connection)
-    
-    for connection in disconnected:
-        if connection in active_connections:
-            active_connections.remove(connection)
+@app.get("/api/status")
+async def get_system_status():
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "simulation_active": current_simulation["active"],
+        "services": {
+            "noaa": "operational",
+            "routing": "operational",
+            "simulation": "operational"
+        }
+    }
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Starting StellarRoute API...")
-    await cache.clear()
+    await cache.set("api_startup", datetime.utcnow().isoformat(), ttl=3600)
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("Shutting down StellarRoute API...")
     await cache.clear()
