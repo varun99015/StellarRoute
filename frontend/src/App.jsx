@@ -1,5 +1,3 @@
-//StellarRoute\frontend\src\App.jsx
-
 import React, { useState, useEffect, useRef } from 'react'
 import { AlertTriangle, Navigation2, Satellite, MapPin, Target } from 'lucide-react'
 import MapComponent from './components/MapComponent'
@@ -12,7 +10,6 @@ import { DEMO_COORDINATES } from './utils/constants'
 import LoginModal from './components/LoginModal';
 
 function App() {
-  
   // --- AUTHENTICATION STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -48,19 +45,6 @@ function App() {
   const animationFrameRef = useRef(null)
   const lastPositionRef = useRef(null) 
 
-  useEffect(() => {
-    stellarRouteAPI.checkAuthStatus()
-      .then(response => {
-        if (response.data.status === 'authenticated') {
-          setIsLoggedIn(true);
-          setUserName(response.data.user_email);
-        }
-      })
-      .catch(() => {
-        // User is not logged in, do nothing (default is false)
-      });
-  }, []);
-
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
     setIsLoggedIn(true);
@@ -83,9 +67,8 @@ function App() {
   useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
-    imuNavigatorRef.current = new IMUNavigator(startPoint)
+    imuNavigatorRef.current = new VehicleAnimator([startPoint])
     
-    // Auto-start demo route
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
@@ -127,16 +110,28 @@ function App() {
       setRoutes(data.alternatives || {})
       setCurrentRouteMode(mode)
 
-      const routePath = data.route?.path || [start, end]
+      // --- CRITICAL FIX: INITIAL PATH SELECTION ---
+      // If we are in simulation mode and a drift path exists, DEFAULT to it for Normal mode.
+      let initialPath = data.route?.path || [start, end];
       
-      // If NOT currently moving, reset vehicle to start
+      if (mode === 'normal' && simulationMode && data.alternatives?.drifted?.path) {
+          console.log("Starting in Normal Mode with Active Storm: Using DRIFT Path");
+          initialPath = data.alternatives.drifted.path;
+      } else if (data.alternatives?.normal?.path) {
+          initialPath = data.alternatives.normal.path;
+      }
+
+      // Initialize Main Animator
       if (!vehicleMoving) {
-        vehicleAnimatorRef.current = new VehicleAnimator(routePath)
-        setVehiclePosition(routePath[0])
-        lastPositionRef.current = routePath[0]
+        vehicleAnimatorRef.current = new VehicleAnimator(initialPath)
+        setVehiclePosition(initialPath[0])
+        lastPositionRef.current = initialPath[0]
       }
       
-      if (start && end) calculateIMUPath(start, end)
+      // Store Safe Path for IMU
+      if (data.alternatives?.safe?.path) {
+          setImuPath(data.alternatives.safe.path);
+      }
       
     } catch (error) {
       console.error('Error calculating route:', error)
@@ -145,25 +140,16 @@ function App() {
     }
   }
   
-  const calculateIMUPath = async (start, end) => {
-    try {
-      const response = await stellarRouteAPI.calculateRoute(start, end, 'safe')
-      const data = response.data
-      if (data.alternatives?.safe?.path) {
-        setImuPath(data.alternatives.safe.path)
-      }
-    } catch (error) {
-      console.error('Error calculating IMU path:', error)
-    }
-  }
-
   const simulateStorm = async (scenario) => {
     try {
       setLoading(true)
       const response = await stellarRouteAPI.simulateStorm(scenario, mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
       setSimulationMode(true)
-      if (startPoint && endPoint) calculateRoute(startPoint, endPoint, currentRouteMode)
+      
+      if (startPoint && endPoint) {
+          calculateRoute(startPoint, endPoint, currentRouteMode)
+      }
     } catch (error) { console.error(error); setLoading(false) }
   }
   
@@ -185,21 +171,11 @@ function App() {
       setStartPoint(coords)
       setVehiclePosition(coords)
       lastPositionRef.current = coords
-      
-      // If end point exists, recalculate route immediately
-      if (endPoint) {
-        calculateRoute(coords, endPoint, currentRouteMode)
-      }
+      if (endPoint) calculateRoute(coords, endPoint, currentRouteMode)
     } else if (activePointType === 'end') {
       setEndPoint(coords)
-      
-      // If start point exists, recalculate route immediately
-      if (startPoint) {
-        calculateRoute(startPoint, coords, currentRouteMode)
-      }
+      if (startPoint) calculateRoute(startPoint, coords, currentRouteMode)
     }
-    
-    // Turn off selection mode after setting a point
     setActivePointType(null)
   }
 
@@ -208,7 +184,6 @@ function App() {
     fetchHeatmap(bounds)
   }
 
-  // --- SIMULATION LOGIC ---
   const findClosestPathIndex = (position, path) => {
     if (!position || !path || path.length === 0) return 0
     let minDist = Infinity
@@ -227,89 +202,110 @@ function App() {
     return closestIndex
   }
 
-  const toggleGPSFailure = () => {
-    const newGPSState = !gpsActive
-    setGPSActive(newGPSState)
+  // --- UNIFIED SYSTEM MODE SWITCHER ---
+  const toggleSystemMode = (targetMode) => {
+    const isSafeMode = targetMode === 'safe';
     
-    const currentPos = vehiclePosition || startPoint
-    lastPositionRef.current = currentPos 
+    setCurrentRouteMode(targetMode);
     
-    if (newGPSState === false) {
-      // ENTERING FAILURE MODE
-      const riskLevel = spaceWeather?.risk_level || 'medium'
-      const driftSeverity = (spaceWeather?.kp_index || 0) < 4 ? 'low' : (spaceWeather?.kp_index || 0) < 7 ? 'medium' : 'high'
+    // Determine GPS State (Safe Mode = GPS Off)
+    const shouldGPSBeActive = !isSafeMode; 
+    setGPSActive(shouldGPSBeActive);
+    
+    const currentPos = vehiclePosition || startPoint;
+    lastPositionRef.current = currentPos;
+
+    if (!shouldGPSBeActive) {
+      // === SWITCHING TO SAFE MODE (IMU) ===
+      // Snap to GREEN/SAFE path
+      const targetPath = imuPath.length > 0 ? imuPath : (routes.safe?.path || routes.normal?.path || []);
       
-      gpsSimulatorRef.current = new GPSSimulator(currentPos)
-      gpsSimulatorRef.current.simulateGPSFailure(riskLevel, driftSeverity)
+      if (targetPath.length > 0) {
+          const closestIndex = findClosestPathIndex(currentPos, targetPath);
+          const remainingPath = targetPath.slice(closestIndex);
+          imuNavigatorRef.current = new VehicleAnimator(remainingPath);
+      }
+      setUseIMUNavigation(true);
+
+    } else {
+      // === SWITCHING TO NORMAL MODE (GPS) ===
+      // Logic: If storm is active, use DRIFTED path. If not, use NORMAL path.
       
-      const activePath = imuPath.length > 0 ? imuPath : (routes[currentRouteMode]?.path || [])
-      const closestIndex = findClosestPathIndex(currentPos, activePath)
-      const remainingPath = activePath.slice(closestIndex)
+      let targetPath = routes.normal?.path || [];
       
-      if (remainingPath.length > 0) {
-        imuNavigatorRef.current = new IMUNavigator(currentPos, remainingPath)
+      // CRITICAL FIX: Explicitly check for drifted path existence
+      if (simulationMode && routes.drifted?.path && routes.drifted.path.length > 0) {
+          console.log("Switching to Normal Mode: Storm Active -> Engaging DRIFT Path");
+          targetPath = routes.drifted.path;
+      } else {
+          console.log("Switching to Normal Mode: No Storm -> Engaging NORMAL Path");
       }
 
-      setUseIMUNavigation(true) 
-      
-    } else {
-      // RESTORING GPS
-      if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS()
-      
-      if (vehicleAnimatorRef.current) {
-        const truePos = vehicleAnimatorRef.current.update() 
-        setVehiclePosition(truePos)
-        lastPositionRef.current = truePos
+      if (targetPath.length > 0) {
+          // Snap from current safe position to wherever we are on the GPS path
+          const closestIndex = findClosestPathIndex(currentPos, targetPath);
+          const remainingPath = targetPath.slice(closestIndex);
+          
+          // Reset main animator with the chosen path (Drifted or Normal)
+          vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
       }
-      
-      setUseIMUNavigation(false)
-      setDriftPath([])
+
+      if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS();
+      setUseIMUNavigation(false);
+      setDriftPath([]); 
     }
-  }
+  };
+
+  const handleGPSFailureToggle = () => {
+      const newMode = gpsActive ? 'safe' : 'normal';
+      toggleSystemMode(newMode);
+  };
 
   // Animation Loop
   useEffect(() => {
     let animationId
     const animate = () => {
-      if (vehicleAnimatorRef.current && vehicleMoving) {
-        const actualPosition = vehicleAnimatorRef.current.update()
-        let displayPosition = actualPosition
-        
-        if (!gpsActive) {
-          if (useIMUNavigation && imuNavigatorRef.current) {
-             // IMU Mode
-             displayPosition = imuNavigatorRef.current.update() 
-          } else if (gpsSimulatorRef.current) {
-             // Drift Mode
-             displayPosition = gpsSimulatorRef.current.updatePosition(
-                actualPosition,
-                spaceWeather?.risk_level
-             )
-             setDriftPath(prev => [...prev, displayPosition])
-          }
-        }
+      if (vehicleMoving) {
+        let displayPosition;
 
-        setVehiclePosition(displayPosition)
-        
-        if (vehicleAnimatorRef.current.isMoving) {
-          animationId = requestAnimationFrame(animate)
+        if (gpsActive) {
+             // GPS MODE: Uses vehicleAnimator (configured to Drifted or Normal in toggleSystemMode)
+             if (vehicleAnimatorRef.current) {
+                 displayPosition = vehicleAnimatorRef.current.update();
+             }
         } else {
-          setVehicleMoving(false)
-          if (!gpsActive) console.log('Journey complete (IMU Mode)')
+             // IMU MODE: Uses imuNavigator (configured to Safe Path)
+             if (imuNavigatorRef.current) {
+                 displayPosition = imuNavigatorRef.current.update();
+             }
         }
+        
+        if (displayPosition) {
+            setVehiclePosition(displayPosition);
+            
+            const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
+            if (currentAnimator && !currentAnimator.isMoving) {
+                 setVehicleMoving(false);
+            }
+        }
+        
+        animationId = requestAnimationFrame(animate);
       }
     }
 
     if (vehicleMoving) {
-      vehicleAnimatorRef.current?.start()
+      if (gpsActive) vehicleAnimatorRef.current?.start();
+      else imuNavigatorRef.current?.start();
+      
       animationId = requestAnimationFrame(animate)
     } else {
       vehicleAnimatorRef.current?.pause()
+      imuNavigatorRef.current?.pause()
       if (animationId) cancelAnimationFrame(animationId)
     }
 
     return () => { if (animationId) cancelAnimationFrame(animationId) }
-  }, [vehicleMoving, gpsActive, useIMUNavigation, spaceWeather])
+  }, [vehicleMoving, gpsActive, useIMUNavigation])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
@@ -325,7 +321,7 @@ function App() {
     
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
-      const route = routes[currentRouteMode]?.path || [startPoint, endPoint]
+      const route = routes.normal?.path || [startPoint, endPoint]
       vehicleAnimatorRef.current = new VehicleAnimator(route)
     }
   }
@@ -403,9 +399,9 @@ function App() {
         </div>
       </header>
       
-      {/* --- RESTORED POINT SELECTION MODAL --- */}
+      {/* --- POINT SELECTION MODAL --- */}
       {activePointType === 'selecting' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] animate-fade-in">
           <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4 text-gray-800">Set Point on Map</h3>
             <p className="text-gray-600 mb-6">Choose which point you want to set, then click on the map.</p>
@@ -448,7 +444,7 @@ function App() {
       
       {/* VISUAL INDICATOR FOR ACTIVE SELECTION MODE */}
       {(activePointType === 'start' || activePointType === 'end') && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[2000] bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
           {activePointType === 'start' ? (
             <MapPin className="w-5 h-5 text-blue-400" />
           ) : (
@@ -480,14 +476,9 @@ function App() {
 
             <ControlPanel
               routeMode={currentRouteMode}
-              onRouteModeChange={(mode) => {
-                setCurrentRouteMode(mode)
-                if (startPoint && endPoint) {
-                  calculateRoute(startPoint, endPoint, mode)
-                }
-              }}
+              onRouteModeChange={toggleSystemMode}
               gpsActive={gpsActive}
-              onGPSFailureToggle={toggleGPSFailure}
+              onGPSFailureToggle={handleGPSFailureToggle}
               vehicleMoving={vehicleMoving}
               onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
               onReset={resetSimulation}
@@ -551,12 +542,7 @@ function App() {
               <RouteComparison
                 routes={routes}
                 currentMode={currentRouteMode}
-                onSelectRoute={(mode) => {
-                  setCurrentRouteMode(mode)
-                  if (startPoint && endPoint) {
-                    calculateRoute(startPoint, endPoint, mode)
-                  }
-                }}
+                onSelectRoute={toggleSystemMode}
               />
             </div>
           </div>
