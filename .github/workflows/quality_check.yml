@@ -1,0 +1,74 @@
+name: Code Quality Checks
+
+# Trigger on Pull Requests and Pushes to main
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  # JOB 1: CHECK FRONTEND (React)
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend  # Point to your React folder
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install Dependencies
+      run: npm ci
+
+    - name: Run Linter (ESLint)
+      run: npm run lint
+      # If this fails, make sure you have a "lint" script in frontend/package.json
+      # Default Vite projects usually have it.
+
+    # Optional: Check Formatting (Prettier)
+    # - name: Check Formatting (Prettier)
+    #   run: npx prettier --check .
+
+  # JOB 2: CHECK BACKEND (Python)
+  backend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend   # Point to your FastAPI folder
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11' 
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Run Formatter Check (Black)
+      # This checks if code is formatted correctly. It won't change it, just alert you.
+      run: black --check .
+
+    - name: Run Linter (Flake8)
+      # stop the build if there are Python syntax errors or undefined names
+      run: |
+        # E9,F63,F7,F82 are critical syntax errors
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
