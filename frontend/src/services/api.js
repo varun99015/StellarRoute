@@ -56,6 +56,8 @@ export const stellarRouteAPI = {
   logout: () => { // Use the 'api' instance
     return api.post('/auth/logout');
   },
+
+  checkAuthStatus: () => api.get('/auth/status'),
 }
 
 // Helper functions (Unchanged)

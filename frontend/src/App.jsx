@@ -1,3 +1,5 @@
+//StellarRoute\frontend\src\App.jsx
+
 import React, { useState, useEffect, useRef } from 'react'
 import { AlertTriangle, Navigation2, Satellite, MapPin, Target } from 'lucide-react'
 import MapComponent from './components/MapComponent'
@@ -10,6 +12,7 @@ import { DEMO_COORDINATES } from './utils/constants'
 import LoginModal from './components/LoginModal';
 
 function App() {
+  
   // --- AUTHENTICATION STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -44,6 +47,19 @@ function App() {
   const imuNavigatorRef = useRef(null)
   const animationFrameRef = useRef(null)
   const lastPositionRef = useRef(null) 
+
+  useEffect(() => {
+    stellarRouteAPI.checkAuthStatus()
+      .then(response => {
+        if (response.data.status === 'authenticated') {
+          setIsLoggedIn(true);
+          setUserName(response.data.user_email);
+        }
+      })
+      .catch(() => {
+        // User is not logged in, do nothing (default is false)
+      });
+  }, []);
 
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
