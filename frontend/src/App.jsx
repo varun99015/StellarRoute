@@ -1,109 +1,93 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { AlertTriangle, Navigation2, Satellite } from 'lucide-react'
+import { AlertTriangle, Navigation2, Satellite, MapPin, Target } from 'lucide-react'
 import MapComponent from './components/MapComponent'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import ControlPanel from './components/ControlPanel'
 import RouteComparison from './components/RouteComparison'
 import { stellarRouteAPI } from './services/api'
-import { GPSSimulator, VehicleAnimator } from './utils/simulation'
+import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 
-// --- NEW IMPORT ---
+// --- NEW IMPORT (Auth) ---
 import LoginModal from './components/LoginModal';
 
 function App() {
-  // --- AUTHENTICATION STATE (NEW) ---
+  // --- AUTHENTICATION STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userName, setUserName] = useState(null);
-  // ---------------------------------
-
-  // State (Existing)
+  
+  // --- CORE STATE ---
   const [spaceWeather, setSpaceWeather] = useState(null)
   const [heatmapData, setHeatmapData] = useState(null)
   const [routes, setRoutes] = useState({})
   const [currentRouteMode, setCurrentRouteMode] = useState('normal')
   const [loading, setLoading] = useState(false)
   const [simulationMode, setSimulationMode] = useState(false)
-  const [activePointType, setActivePointType] = useState(null);
+  const [activePointType, setActivePointType] = useState(null)
+  const [imuPath, setImuPath] = useState([])
+  const [driftPath, setDriftPath] = useState([])
 
-  // Map State (Existing)
+  // --- MAP STATE ---
   const [mapCenter] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
   const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.OAKLAND)
   const [mapBounds, setMapBounds] = useState(null)
 
-  // Simulation State (Existing)
+  // --- SIMULATION STATE ---
   const [gpsActive, setGPSActive] = useState(true)
   const [vehicleMoving, setVehicleMoving] = useState(false)
   const [vehiclePosition, setVehiclePosition] = useState(null)
-
-  // Refs (Existing)
+  const [useIMUNavigation, setUseIMUNavigation] = useState(false)
+  
+  // --- REFS ---
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
+  const imuNavigatorRef = useRef(null)
   const animationFrameRef = useRef(null)
+  const lastPositionRef = useRef(null) 
 
-  // --- AUTHENTICATION HANDLERS (NEW) ---
-
-  /**
-   * Called by LoginModal on successful OTP verification.
-   * Sets the user's logged-in state and displays their email.
-   */
+  // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
     setIsLoggedIn(true);
-    setUserName(userDisplayName); // userDisplayName is the email received from FastAPI
-    setShowLoginModal(false); // Close the modal
-    // If the app needs user-specific data, re-fetch it here
-    // fetchSpaceWeather(); 
+    setUserName(userDisplayName); 
+    setShowLoginModal(false); 
   };
 
-  /**
-   * Clears the session cookie via the backend and resets local state.
-   */
   const handleLogout = async () => {
     try {
-      // Use the new logout API function which clears the HttpOnly cookie
       await stellarRouteAPI.logout();
     } catch (error) {
-      console.error("Logout failed (server may be unreachable):", error);
+      console.error("Logout failed:", error);
     } finally {
-      // Always clear client state regardless of server response
       setIsLoggedIn(false);
       setUserName(null);
     }
   };
-  // ------------------------------------
 
-  // Initialize (Existing)
+  // --- INITIALIZATION ---
   useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
-
-    // Demo: Auto-calculate initial route
+    imuNavigatorRef.current = new IMUNavigator(startPoint)
+    
+    // Auto-start demo route
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
 
     return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
     }
   }, [])
 
-  // Fetch space weather data (Existing)
+  // --- API CALLS ---
   const fetchSpaceWeather = async () => {
     try {
       setLoading(true)
-      const response = await stellarRouteAPI.getCurrentSpaceWeather(
-        mapCenter[0],
-        mapCenter[1]
-      )
+      const response = await stellarRouteAPI.getCurrentSpaceWeather(mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
-
-      if (mapBounds) {
-        fetchHeatmap(mapBounds)
-      }
+      if (mapBounds) fetchHeatmap(mapBounds)
     } catch (error) {
       console.error('Error fetching space weather:', error)
     } finally {
@@ -113,7 +97,7 @@ function App() {
 
   const fetchHeatmap = async (bounds) => {
     try {
-      const response = await stellarRouteAPI.getHeatmap(bounds, 0.05)
+      const response = await stellarRouteAPI.getHeatmap(bounds, 0.02)
       setHeatmapData(response.data)
     } catch (error) {
       console.error('Error fetching heatmap:', error)
@@ -130,44 +114,45 @@ function App() {
       setCurrentRouteMode(mode)
 
       const routePath = data.route?.path || [start, end]
-      vehicleAnimatorRef.current = new VehicleAnimator(routePath)
-      setVehiclePosition(routePath[0])
-
-      // Reset GPS simulator
-      gpsSimulatorRef.current = new GPSSimulator(routePath[0])
-      setGPSActive(true)
-      setVehicleMoving(false)
-
+      
+      // If NOT currently moving, reset vehicle to start
+      if (!vehicleMoving) {
+        vehicleAnimatorRef.current = new VehicleAnimator(routePath)
+        setVehiclePosition(routePath[0])
+        lastPositionRef.current = routePath[0]
+      }
+      
+      if (start && end) calculateIMUPath(start, end)
+      
     } catch (error) {
       console.error('Error calculating route:', error)
     } finally {
       setLoading(false)
     }
   }
+  
+  const calculateIMUPath = async (start, end) => {
+    try {
+      const response = await stellarRouteAPI.calculateRoute(start, end, 'safe')
+      const data = response.data
+      if (data.alternatives?.safe?.path) {
+        setImuPath(data.alternatives.safe.path)
+      }
+    } catch (error) {
+      console.error('Error calculating IMU path:', error)
+    }
+  }
 
   const simulateStorm = async (scenario) => {
     try {
       setLoading(true)
-      const response = await stellarRouteAPI.simulateStorm(
-        scenario,
-        mapCenter[0],
-        mapCenter[1]
-      )
-
+      const response = await stellarRouteAPI.simulateStorm(scenario, mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
       setSimulationMode(true)
-
-      if (startPoint && endPoint) {
-        calculateRoute(startPoint, endPoint, currentRouteMode)
-      }
-
-    } catch (error) {
-      console.error('Error simulating storm:', error)
-    } finally {
-      setLoading(false)
-    }
+      if (startPoint && endPoint) calculateRoute(startPoint, endPoint, currentRouteMode)
+    } catch (error) { console.error(error); setLoading(false) }
   }
-
+  
   const stopSimulation = async () => {
     try {
       await stellarRouteAPI.stopSimulation()
@@ -178,126 +163,157 @@ function App() {
     }
   }
 
-
+  // --- MAP INTERACTION ---
   const handleMapClick = (coords) => {
     if (!activePointType) return;
-
     if (activePointType === 'start') {
-      setStartPoint(coords);
-      // showNotification('Start point set!'); // Assuming showNotification exists
-    } else {
-      setEndPoint(coords);
-      // showNotification('End point set!'); // Assuming showNotification exists
-
-      if (startPoint) {
-        calculateRoute(startPoint, coords, currentRouteMode);
-      }
+      setStartPoint(coords)
+      setVehiclePosition(coords)
+      lastPositionRef.current = coords
+      if (endPoint) calculateRoute(coords, endPoint, currentRouteMode)
+    } else if (activePointType === 'end') {
+      setEndPoint(coords)
+      if (startPoint) calculateRoute(startPoint, coords, currentRouteMode)
     }
-
-    setActivePointType(null);
-  };
+    setActivePointType(null)
+  }
 
   const handleBoundsChange = (bounds) => {
     setMapBounds(bounds)
     fetchHeatmap(bounds)
   }
 
-  // Toggle GPS failure (Existing)
-  const toggleGPSFailure = () => {
-    setGPSActive(prev => !prev)
+  // --- SIMULATION LOGIC ---
+  const findClosestPathIndex = (position, path) => {
+    if (!position || !path || path.length === 0) return 0
+    let minDist = Infinity
+    let closestIndex = 0
+    
+    path.forEach((point, index) => {
+      const dist = Math.sqrt(
+        Math.pow(point[0] - position[0], 2) + 
+        Math.pow(point[1] - position[1], 2)
+      )
+      if (dist < minDist) {
+        minDist = dist
+        closestIndex = index
+      }
+    })
+    return closestIndex
+  }
 
-    if (gpsActive && gpsSimulatorRef.current) {
+  const toggleGPSFailure = () => {
+    const newGPSState = !gpsActive
+    setGPSActive(newGPSState)
+    
+    const currentPos = vehiclePosition || startPoint
+    lastPositionRef.current = currentPos 
+    
+    if (newGPSState === false) {
+      // ENTERING FAILURE MODE
       const riskLevel = spaceWeather?.risk_level || 'medium'
-      gpsSimulatorRef.current.simulateGPSFailure(riskLevel)
-    } else if (!gpsActive && gpsSimulatorRef.current) {
-      gpsSimulatorRef.current.restoreGPS()
+      const driftSeverity = (spaceWeather?.kp_index || 0) < 4 ? 'low' : (spaceWeather?.kp_index || 0) < 7 ? 'medium' : 'high'
+      
+      gpsSimulatorRef.current = new GPSSimulator(currentPos)
+      gpsSimulatorRef.current.simulateGPSFailure(riskLevel, driftSeverity)
+      
+      const activePath = imuPath.length > 0 ? imuPath : (routes[currentRouteMode]?.path || [])
+      const closestIndex = findClosestPathIndex(currentPos, activePath)
+      const remainingPath = activePath.slice(closestIndex)
+      
+      if (remainingPath.length > 0) {
+        imuNavigatorRef.current = new IMUNavigator(currentPos, remainingPath)
+      }
+
+      setUseIMUNavigation(true) 
+      
+    } else {
+      // RESTORING GPS
+      if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS()
+      
+      if (vehicleAnimatorRef.current) {
+        const truePos = vehicleAnimatorRef.current.update() 
+        setVehiclePosition(truePos)
+        lastPositionRef.current = truePos
+      }
+      
+      setUseIMUNavigation(false)
+      setDriftPath([])
     }
   }
 
-  // Toggle vehicle movement (Existing)
-  const toggleVehicleMovement = () => {
-    setVehicleMoving(prev => !prev)
-  }
-
-  // Animation Loop (Existing)
+  // Animation Loop
   useEffect(() => {
-    let animationId;
-
+    let animationId
     const animate = () => {
-      if (vehicleAnimatorRef.current) {
-        // 1. Update REAL position based on route
+      if (vehicleAnimatorRef.current && vehicleMoving) {
         const actualPosition = vehicleAnimatorRef.current.update()
-
         let displayPosition = actualPosition
-
-        // 2. Apply GPS drift if GPS is inactive
-        if (!gpsActive && gpsSimulatorRef.current) {
-          displayPosition = gpsSimulatorRef.current.updatePosition(
-            actualPosition,
-            spaceWeather?.risk_level
-          )
+        
+        if (!gpsActive) {
+          if (useIMUNavigation && imuNavigatorRef.current) {
+             // IMU Mode
+             displayPosition = imuNavigatorRef.current.update() 
+          } else if (gpsSimulatorRef.current) {
+             // Drift Mode
+             displayPosition = gpsSimulatorRef.current.updatePosition(
+                actualPosition,
+                spaceWeather?.risk_level
+             )
+             setDriftPath(prev => [...prev, displayPosition])
+          }
         }
 
         setVehiclePosition(displayPosition)
-
-        // 3. Continue loop if still moving
+        
         if (vehicleAnimatorRef.current.isMoving) {
           animationId = requestAnimationFrame(animate)
         } else {
           setVehicleMoving(false)
+          if (!gpsActive) console.log('Journey complete (IMU Mode)') // Replaced showNotification
         }
       }
     }
 
-    if (vehicleMoving && vehicleAnimatorRef.current) {
-      vehicleAnimatorRef.current.start()
+    if (vehicleMoving) {
+      vehicleAnimatorRef.current?.start()
       animationId = requestAnimationFrame(animate)
     } else {
       vehicleAnimatorRef.current?.pause()
       if (animationId) cancelAnimationFrame(animationId)
     }
 
-    return () => {
-      if (animationId) cancelAnimationFrame(animationId)
-    }
-  }, [vehicleMoving, gpsActive, spaceWeather])
+    return () => { if (animationId) cancelAnimationFrame(animationId) }
+  }, [vehicleMoving, gpsActive, useIMUNavigation, spaceWeather])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
     setGPSActive(true)
+    setUseIMUNavigation(false)
+    setDriftPath([])
     setVehiclePosition(startPoint)
-    stopSimulation() // Ensure backend simulation stops too
-
-    if (gpsSimulatorRef.current) {
-      gpsSimulatorRef.current.reset()
-    }
-
+    stopSimulation()
+    
+    lastPositionRef.current = startPoint
+    
+    if (gpsSimulatorRef.current) gpsSimulatorRef.current.reset()
+    
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
-      vehicleAnimatorRef.current = new VehicleAnimator([startPoint, endPoint])
+      const route = routes[currentRouteMode]?.path || [startPoint, endPoint]
+      vehicleAnimatorRef.current = new VehicleAnimator(route)
     }
   }
 
   const useDemoRoute = (routeName) => {
     let start, end
     switch (routeName) {
-      case 'SF_OAKLAND':
-        start = DEMO_COORDINATES.SAN_FRANCISCO
-        end = DEMO_COORDINATES.OAKLAND
-        break
-      case 'SF_BERKELEY':
-        start = DEMO_COORDINATES.SAN_FRANCISCO
-        end = DEMO_COORDINATES.BERKELEY
-        break
-      case 'SF_SAN_JOSE':
-        start = DEMO_COORDINATES.SAN_FRANCISCO
-        end = DEMO_COORDINATES.SAN_JOSE
-        break
-      default:
-        return
+      case 'SF_OAKLAND': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.OAKLAND; break
+      case 'SF_BERKELEY': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.BERKELEY; break
+      case 'SF_SAN_JOSE': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.SAN_JOSE; break
+      default: return
     }
-    setStartPoint(start)
-    setEndPoint(end)
+    setStartPoint(start); setEndPoint(end); setVehiclePosition(start)
     calculateRoute(start, end, currentRouteMode)
   }
 
@@ -331,7 +347,7 @@ function App() {
                 </div>
               </div>
 
-              {/* AUTHENTICATION LOGIC START: Login/Logout Buttons */}
+              {/* AUTHENTICATION BUTTONS */}
               {isLoggedIn ? (
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Hi, {userName || 'User'}</span>
@@ -350,7 +366,6 @@ function App() {
                   Login (Challenge)
                 </button>
               )}
-              {/* AUTHENTICATION LOGIC END */}
 
               <button
                 onClick={resetSimulation}
@@ -386,8 +401,10 @@ function App() {
               gpsActive={gpsActive}
               onGPSFailureToggle={toggleGPSFailure}
               vehicleMoving={vehicleMoving}
-              onVehicleMoveToggle={toggleVehicleMovement}
+              onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
               onReset={resetSimulation}
+              onSetPoints={() => setActivePointType('selecting')}
+              onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
               startPoint={startPoint}
               endPoint={endPoint}
               onUseDemoRoute={useDemoRoute}
@@ -405,6 +422,9 @@ function App() {
                 startPoint={startPoint}
                 endPoint={endPoint}
                 gpsActive={gpsActive}
+                imuPath={imuPath}
+                driftPath={driftPath}
+                useIMUNavigation={useIMUNavigation}
                 onMapClick={handleMapClick}
                 onBoundsChange={handleBoundsChange}
               />
@@ -484,7 +504,6 @@ function App() {
               <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
               <span className="font-medium">Loading...</span>
             </div>
-
           </div>
         </div>
       )}
