@@ -1,8 +1,12 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Response, status
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Response, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
+from email.mime.text import MIMEText 
+import smtplib 
+from dotenv import load_dotenv 
+import os 
 import asyncio
 import logging
 from datetime import datetime
@@ -26,6 +30,29 @@ from .services.routing_service import AStarRouter
 from .utils.simulation import StormSimulator
 from .cache.memory_cache import cache
 
+
+# --- CONFIGURATION ---
+
+# Load environment variables from .env file
+load_dotenv() 
+
+# JWT/Session Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed") 
+ALGORITHM = "HS256"
+SESSION_EXPIRY_SECONDS = 30 * 60 # 30 minutes
+
+# Email Configuration from .env
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+# Global State/Storage
+OTP_STORE: Dict[str, Dict] = {} # Simulates OTP database storage
+simulation_mode = False
+current_scenario = SimulationScenario.NORMAL
+active_connections: List[WebSocket] = []
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -42,6 +69,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# CORS middleware (FIXED: Explicit origins for allow_credentials=True)
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -49,8 +77,8 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # <-- CHANGED: Replaced ["*"] with explicit origins
-    allow_credentials=True,      # <-- REQUIRED: Stays True for session handling
+    allow_origins=origins,
+    allow_credentials=True, 
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,21 +90,6 @@ heatmap_generator = HeatmapGenerator()
 router = AStarRouter()
 storm_simulator = StormSimulator()
 
-# Global state
-simulation_mode = False
-current_scenario = SimulationScenario.NORMAL
-active_connections: List[WebSocket] = []
-
-
-# --- AUTHENTICATION CONFIGURATION AND UTILITIES (NEW) ---
-
-# IMPORTANT: Replace this with a strong secret key, preferably from environment variables.
-SECRET_KEY = "your-stellarroute-secret-key-replace-me" 
-ALGORITHM = "HS256"
-SESSION_EXPIRY_SECONDS = 30 * 60 # 30 minutes
-
-# Simulates OTP/User database storage: Key: email, Value: {'otp': str, 'expiry': float}
-OTP_STORE: Dict[str, Dict] = {} 
 
 # --- Pydantic Schemas for Authentication ---
 class EmailRequest(BaseModel):
@@ -93,31 +106,76 @@ def generate_otp(length: int = 6) -> str:
     return "".join([str(random.randint(0, 9)) for _ in range(length)])
 
 def send_email_otp(email: EmailStr, otp: str):
-    """Simulated email sending function."""
-    logger.info(f"SIMULATED EMAIL: To: {email}, OTP: {otp}")
+    """ACTUAL function to send an OTP via SMTP (using STARTTLS on 587)."""
+    
+    if not all([SMTP_SERVER, EMAIL_ADDRESS, EMAIL_PASSWORD]):
+        logger.error("Email configuration missing. Cannot send email.")
+        raise HTTPException(status_code=500, detail="Server misconfigured: Email credentials missing.")
+
+    email_body = f"""
+Dear User,
+
+Your StellarRoute verification code (OTP) is:
+---
+{otp}
+---
+
+This code is valid for 5 minutes and is required to complete your login. If you did not request this code, please ignore this email.
+
+Thank you,
+The StellarRoute Team
+"""
+    
+    msg = MIMEText(email_body, 'plain', 'utf-8')
+    msg['Subject'] = 'StellarRoute: Your One-Time Login Code'
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = email
+
+    try:
+        # Use SMTP for connection on the STARTTLS port (587)
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT) 
+        server.ehlo()
+        server.starttls() 
+        server.ehlo()
+
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        
+        server.sendmail(EMAIL_ADDRESS, [email], msg.as_string())
+        
+        server.quit()
+        logger.info(f"SUCCESS: Actual OTP sent to {email}")
+        return True
+    
+    except smtplib.SMTPAuthenticationError:
+        logger.error("SMTP Authentication Failed. Check EMAIL_ADDRESS and EMAIL_PASSWORD (use App Password).")
+        raise HTTPException(status_code=500, detail="Authentication error with the email provider.")
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+        raise HTTPException(status_code=500, detail="Could not connect to or send mail from the SMTP server. Check port/firewall.")
     
 def create_session_jwt(email: str) -> str:
     """Creates a JWT for session tracking."""
     to_encode = {"sub": email, "exp": time.time() + SESSION_EXPIRY_SECONDS}
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# --- AUTHENTICATION ENDPOINTS (NEW) ---
+# --- AUTHENTICATION ENDPOINTS ---
 
 @app.post("/api/auth/request-otp", status_code=status.HTTP_202_ACCEPTED, tags=["Authentication"])
 async def request_otp(request: EmailRequest):
-    """Generates an OTP and simulates sending it to the user's email."""
+    """Generates an OTP and sends it to the user's actual email."""
     
     otp_code = generate_otp()
     
-    # Store OTP with a 5-minute expiry
+    # Attempt to send the email (will raise HTTPException on failure)
+    send_email_otp(request.email, otp_code)
+    
+    # Store OTP only if the email was successfully dispatched
     OTP_STORE[request.email] = {
         "otp": otp_code, 
         "expiry": time.time() + 300 # 5 minutes
     }
-    
-    send_email_otp(request.email, otp_code)
-    
-    return {"message": "OTP sent successfully."}
+    return {"message": "OTP sent successfully. Check your inbox."}
+
 
 @app.post("/api/auth/verify-otp", tags=["Authentication"])
 async def verify_otp_and_login(request_body: OtpVerification, response: Response):
@@ -141,13 +199,13 @@ async def verify_otp_and_login(request_body: OtpVerification, response: Response
     # SUCCESS: Generate Session Token (JWT)
     session_token = create_session_jwt(email)
 
-    # Set the Session Cookie (HttpOnly and SameSite=Lax are CRUCIAL)
+    # Set the Session Cookie (FIXED TYPO: httponly=True)
     response.set_cookie(
         key="session_id", 
         value=session_token, 
-        httphonly=True, 
+        httponly=True,           # <--- CORRECTED
         max_age=SESSION_EXPIRY_SECONDS, 
-        # secure=True, # Recommended in production (requires HTTPS)
+        # secure=True, 
         samesite="Lax" 
     )
     
@@ -162,7 +220,8 @@ async def logout(response: Response):
     return {"message": "Logout successful"}
 
 
-# --- EXISTING ENDPOINTS (UNCHANGED) ---
+# --- EXISTING ENDPOINTS (REST OF APPLICATION LOGIC) ---
+# NOTE: These remain unchanged from your original code.
 
 @app.get("/", tags=["Root"])
 async def root():
@@ -175,7 +234,6 @@ async def root():
 
 @app.get("/api/space-weather/current", response_model=SpaceWeatherData, tags=["Space Weather"])
 async def get_current_space_weather(latitude: float = None, longitude: float = None):
-    """Get current space weather"""
     try:
         if simulation_mode:
             data = storm_simulator.get_simulated_weather(current_scenario)
@@ -196,7 +254,6 @@ async def simulate_space_weather(
     latitude: float = None,
     longitude: float = None
 ):
-    """Simulate space weather"""
     try:
         global simulation_mode, current_scenario
         simulation_mode = True
@@ -218,20 +275,17 @@ async def simulate_space_weather(
 
 @app.get("/api/space-weather/stop-simulation", tags=["Space Weather"])
 async def stop_simulation():
-    """Stop simulation"""
     global simulation_mode
     simulation_mode = False
     return {"message": "Simulation stopped", "mode": "real_data"}
 
 @app.get("/api/space-weather/timeline", tags=["Space Weather"])
 async def get_storm_timeline(scenario: SimulationScenario = SimulationScenario.MODERATE):
-    """Get storm timeline"""
     timeline = storm_simulator.generate_storm_timeline(scenario)
     return {"scenario": scenario.value, "timeline": timeline}
 
 @app.post("/api/heatmap", tags=["Heatmap"])
 async def get_heatmap(request: HeatmapRequest):
-    """Generate risk heatmap"""
     try:
         if simulation_mode:
             kp = storm_simulator.scenarios[current_scenario]["kp_base"]
@@ -240,7 +294,6 @@ async def get_heatmap(request: HeatmapRequest):
             kp = weather_data.kp_index
         
         if request.resolution > 0.5:
-            # Simplified for performance
             request.resolution = 0.2
         
         heatmap = heatmap_generator.generate_heatmap(request, kp)
@@ -256,7 +309,6 @@ async def get_heatmap(request: HeatmapRequest):
 
 @app.post("/api/route", tags=["Routing"])
 async def calculate_route(request: RouteRequest):
-    """Calculate routes"""
     try:
         if simulation_mode:
             kp = storm_simulator.scenarios[current_scenario]["kp_base"]
@@ -273,7 +325,6 @@ async def calculate_route(request: RouteRequest):
         if not route_data:
             route_data = routes.get("normal", routes.get("safe"))
         
-        # TEMPORARY FIX: Return raw data without RouteResponse validation
         return JSONResponse(
             content={
                 "route": {
@@ -296,9 +347,7 @@ async def calculate_route(request: RouteRequest):
 
 @app.get("/api/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
-    """Health check"""
     try:
-        # Check NOAA API
         noaa_status = False
         try:
             data = await noaa_service.fetch_kp_index()
@@ -323,7 +372,6 @@ async def health_check():
 
 @app.websocket("/ws/updates")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket for real-time updates"""
     await websocket.accept()
     active_connections.append(websocket)
     
@@ -340,7 +388,6 @@ async def websocket_endpoint(websocket: WebSocket):
             active_connections.remove(websocket)
 
 async def broadcast_update(event_type: str, data: Dict[str, Any]):
-    """Broadcast to WebSocket clients"""
     disconnected = []
     
     for connection in active_connections:

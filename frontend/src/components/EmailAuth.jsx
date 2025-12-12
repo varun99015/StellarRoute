@@ -1,3 +1,5 @@
+//StellarRoute\frontend\src\components\EmailAuth.jsx
+
 import React, { useState } from 'react';
 import axios from 'axios'; // You'll need to install axios if not present
 

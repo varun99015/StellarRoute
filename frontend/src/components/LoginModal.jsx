@@ -1,3 +1,5 @@
+//StellarRoute\frontend\src\components\LoginModal.jsx
+
 import React, { useState } from 'react';
 import { X, Mail, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { stellarRouteAPI } from '../services/api'; // Reuse existing API service
