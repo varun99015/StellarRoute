@@ -19,10 +19,17 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
 function App() {
-  // --- AUTHENTICATION STATE ---
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // --- AUTHENTICATION STATE (FIXED: Loads from Session) ---
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    // Check storage immediately on load
+    return sessionStorage.getItem('stellar_isLoggedIn') === 'true';
+  });
+  
+  const [userName, setUserName] = useState(() => {
+    return sessionStorage.getItem('stellar_userName');
+  });
+
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [userName, setUserName] = useState(null);
   
   // --- REAL-TIME SENSOR STATE ---
   const [realTimeMode, setRealTimeMode] = useState(false);
@@ -57,6 +64,17 @@ function App() {
   const imuNavigatorRef = useRef(null)
   const animationFrameRef = useRef(null)
   const lastPositionRef = useRef(null) 
+
+  // --- SESSION PERSISTENCE EFFECT ---
+  // This saves the login state whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('stellar_isLoggedIn', isLoggedIn);
+    if (userName) {
+      sessionStorage.setItem('stellar_userName', userName);
+    } else {
+      sessionStorage.removeItem('stellar_userName');
+    }
+  }, [isLoggedIn, userName]);
 
   // --- MATH HELPER FOR REAL-TIME ---
   const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
@@ -96,7 +114,7 @@ function App() {
       };
   }
 
-// --- FIREBASE LISTENER WITH DEBUG LOGS ---
+  // --- FIREBASE LISTENER WITH DEBUG LOGS ---
   useEffect(() => {
     if (realTimeMode) {
         console.log("%c📡 CONNECTED TO FIREBASE - LISTENING FOR SENSORS...", "color: green; font-weight: bold; font-size: 14px;");
@@ -108,7 +126,6 @@ function App() {
             
             if (data && lastPositionRef.current) {
                 // LOG 1: RAW INCOMING DATA
-                // Shows exactly what the phone sent
                 console.groupCollapsed(`[Sensor Packet] ${new Date().toLocaleTimeString()}`);
                 console.log(`📱 Raw Phone Data:`, data);
                 console.log(`🚀 Speed: ${data.speed} km/h`);
@@ -123,7 +140,6 @@ function App() {
                 );
                 
                 // LOG 2: MATH & RESULT
-                // Shows the calculation happening
                 console.log(`📍 Previous Position: ${lastPositionRef.current[0].toFixed(6)}, ${lastPositionRef.current[1].toFixed(6)}`);
                 console.log(`➕ Computed Offset: Moving ${(data.speed/3.6).toFixed(2)} m/s for ${((data.timestamp - lastSensorTime)/1000).toFixed(3)}s`);
                 console.log(`🎯 NEW Position: ${newPos.lat.toFixed(6)}, ${newPos.lon.toFixed(6)}`);
@@ -165,6 +181,7 @@ function App() {
     } finally {
       setIsLoggedIn(false);
       setUserName(null);
+      sessionStorage.clear(); // Clear storage on logout
     }
   };
 
@@ -505,7 +522,7 @@ function App() {
                   onClick={() => setShowLoginModal(true)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  Login (Challenge)
+                  Login
                 </button>
               )}
 

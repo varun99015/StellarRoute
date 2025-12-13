@@ -374,33 +374,9 @@ const MapComponent = ({
         )}
       </MapContainer>
       
-      {/* Map Controls Overlay */}
-      <div className="absolute top-4 left-4 glass-card p-3 rounded-lg backdrop-blur-sm z-[1000]">
-        <div className="text-sm font-medium text-gray-700">Map Controls</div>
-        <div className="flex gap-2 mt-2">
-          <button
-            onClick={() => mapRef.current?.setView(center, zoom)}
-            className="px-3 py-1 text-sm bg-white/90 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-          >
-            Reset View
-          </button>
-          <button
-            onClick={() => mapRef.current?.zoomIn()}
-            className="px-3 py-1 text-sm bg-white/90 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-          >
-            Zoom In
-          </button>
-          <button
-            onClick={() => mapRef.current?.zoomOut()}
-            className="px-3 py-1 text-sm bg-white/90 border border-gray-300 rounded hover:bg-gray-50 transition-colors"
-          >
-            Zoom Out
-          </button>
-        </div>
-      </div>
-      
+
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 glass-card p-3 rounded-lg backdrop-blur-sm max-w-xs z-[1000]">
+      <div className="absolute bottom-0 left-0 glass-card p-2 rounded-lg backdrop-blur-sm max-w-xs z-[1000]">
         <div className="text-sm font-medium text-gray-700 mb-2">Map Legend</div>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
