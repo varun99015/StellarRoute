@@ -94,6 +94,8 @@ const MapController = ({ center, zoom, bounds }) => {
 }
 
 const MapComponent = ({
+  chaosMode = false, 
+  chaosIntensity = 1,
   center = [37.7749, -122.4194],
   zoom = 13,
   heatmapData = null,
@@ -325,9 +327,12 @@ useEffect(() => {
         ref={mapRef}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  url={chaosMode 
+    ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+    : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+  }
+/>
         
         <MapController center={center} zoom={zoom} />
         <MapClickHandler onMapClick={onMapClick} />
