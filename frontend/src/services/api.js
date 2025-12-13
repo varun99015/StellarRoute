@@ -67,5 +67,4 @@ export const calculateBoundingBox = (center, radiusKm = 5) => {
     lat + latDelta // maxLat
   ]
 };
-
 export default api;
