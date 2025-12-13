@@ -1,49 +1,50 @@
 # StellarRoute\backend\app\main.py
 
+import asyncio
+import hashlib
+import logging
+import os
+import random
+import smtplib
+import time
+from datetime import datetime
+from email.mime.text import MIMEText
+from typing import Any, Dict, List, Optional
+
+from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
+    HTTPException,
+    Request,
+    Response,
     WebSocket,
     WebSocketDisconnect,
-    HTTPException,
-    Response,
     status,
-    Request,
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from jose import jwt, JWTError
-from email.mime.text import MIMEText
-import smtplib
-from dotenv import load_dotenv
-import os
-import asyncio
-import logging
-from datetime import datetime
-import random
-import time
-import hashlib
-from typing import Dict, Any, List, Optional
+
+from .cache.memory_cache import cache
 
 # Assuming these modules exist in your project structure
 from .models import (
-    SpaceWeatherData,
+    GPSFailureSimulation,
+    HealthResponse,
     HeatmapRequest,
+    IMUPathRequest,
     RouteRequest,
     RouteResponse,
-    StormSimulationRequest,
-    GPSFailureSimulation,
-    IMUPathRequest,
-    HealthResponse,
     SimulationScenario,
+    SpaceWeatherData,
+    StormSimulationRequest,
 )
+from .services.heatmap_service import HeatmapGenerator
 from .services.noaa_service import NOAAWeatherService
 from .services.risk_service import RiskAssessmentService
-from .services.heatmap_service import HeatmapGenerator
 from .services.routing_service import RoadNetworkRouter
 from .services.simulation import StormSimulator
-from .cache.memory_cache import cache
-
 
 # --- CONFIGURATION ---
 

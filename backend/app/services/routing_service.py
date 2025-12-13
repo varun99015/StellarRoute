@@ -1,12 +1,14 @@
-import requests
-import random
-import math
-from typing import List, Tuple, Dict, Any, Optional
-import numpy as np
-from ..models import RouteRequest, RiskLevel
-from .risk_service import RiskAssessmentService
-from ..utils.geo_utils import haversine_distance
 import logging
+import math
+import random
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import requests
+
+from ..models import RiskLevel, RouteRequest
+from ..utils.geo_utils import haversine_distance
+from .risk_service import RiskAssessmentService
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,9 @@
-from typing import Tuple, List
-import random
-import math
-from ..models import RiskLevel, SpaceWeatherData, SimulationScenario
 import logging
+import math
+import random
+from typing import List, Tuple
+
+from ..models import RiskLevel, SimulationScenario, SpaceWeatherData
 
 logger = logging.getLogger(__name__)
 

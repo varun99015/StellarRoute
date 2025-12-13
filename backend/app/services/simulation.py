@@ -1,12 +1,13 @@
-from datetime import datetime, timedelta
-from typing import Dict, Any, List, Tuple
-import random
 import math
+import random
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Tuple
+
 from ..models import (
-    SpaceWeatherData,
+    GPSFailureSimulation,
     RiskLevel,
     SimulationScenario,
-    GPSFailureSimulation,
+    SpaceWeatherData,
 )
 from .risk_service import RiskAssessmentService
 
