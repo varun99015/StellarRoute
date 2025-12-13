@@ -9,6 +9,8 @@ import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 import LoginModal from './components/LoginModal';
+import './styles/chaosEffects.css'; // We'll create this file
+import { audioManager } from './utils/audioManager';
 
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
@@ -58,6 +60,11 @@ function App() {
   const [vehiclePosition, setVehiclePosition] = useState(null)
   const [useIMUNavigation, setUseIMUNavigation] = useState(false)
   
+  const [chaosMode, setChaosMode] = useState(false)
+  const [chaosIntensity, setChaosIntensity] = useState(3)
+  const [chaosAudio, setChaosAudio] = useState(true)
+  const [rebooting, setRebooting] = useState(false)
+
   // --- REFS ---
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
@@ -458,9 +465,150 @@ function App() {
     calculateRoute(start, end, currentRouteMode)
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+  // --- CHAOS MODE AUDIO ---
+const playChaosAudio = () => {
+  if (!chaosAudio || !chaosMode) return;
+  
+  // Create audio context
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  
+  // Create siren sound
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.5);
+  
+  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.02, audioContext.currentTime + 0.5);
+  
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + 0.5);
+  
+  // Play static randomly
+  if (Math.random() > 0.7) {
+    setTimeout(() => {
+      const noise = audioContext.createBufferSource();
+      const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.5, audioContext.sampleRate);
+      const data = buffer.getChannelData(0);
       
+      for (let i = 0; i < buffer.length; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      
+      noise.buffer = buffer;
+      const noiseGain = audioContext.createGain();
+      noiseGain.gain.value = 0.05;
+      
+      noise.connect(noiseGain);
+      noiseGain.connect(audioContext.destination);
+      noise.start();
+      noise.stop(audioContext.currentTime + 0.3);
+    }, 300);
+  }
+};
+
+// Effect for chaos audio
+useEffect(() => {
+  if (chaosMode && chaosAudio) {
+    const interval = setInterval(() => {
+      playChaosAudio();
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }
+}, [chaosMode, chaosAudio]);
+
+useEffect(() => {
+  if (chaosMode && chaosAudio) {
+    audioManager.loadAudio('siren', '/src/assets/audio/emergency_siren.mp3');
+    audioManager.play('siren');
+    audioManager.setVolume('siren', 0.2);
+  } else {
+    audioManager.stop('siren');
+  }
+}, [chaosMode, chaosAudio]);
+
+  return (
+  <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
+    
+    {/* CHAOS OVERLAY EFFECTS */}
+    {chaosMode && (
+      <>
+        {/* Red pulsing overlay */}
+        <div className="fixed inset-0 pointer-events-none z-40">
+          <div className={`absolute inset-0 ${chaosIntensity >= 3 ? 'bg-red-500/10 animate-pulse' : 'bg-red-500/5'}`}></div>
+          
+          {/* Screen shake effect */}
+          <div className={`absolute inset-0 ${chaosIntensity >= 2 ? 'animate-shake' : ''}`}></div>
+          
+          {/* VHS scan lines */}
+          <div className="absolute inset-0" style={{
+            backgroundImage: `linear-gradient(
+              to bottom,
+              transparent 50%,
+              rgba(0, 255, 255, 0.03) 50%
+            )`,
+            backgroundSize: '100% 4px',
+            opacity: chaosIntensity >= 3 ? 0.3 : 0.1
+          }}></div>
+          
+          {/* Emergency border */}
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
+          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
+          
+          {/* Glitch particles */}
+          {[...Array(chaosIntensity * 5)].map((_, i) => (
+            <div 
+              key={i}
+              className="absolute w-1 h-1 bg-red-500 rounded-full animate-ping"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                opacity: Math.random() * 0.5
+              }}
+            />
+          ))}
+        </div>
+        
+        {/* Emergency Banner */}
+        <div className={`relative z-50 ${chaosIntensity >= 4 ? 'animate-shake-hard' : 'animate-shake'}`}>
+          <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-600 text-yellow-300 text-center p-3 text-xl font-black border-y-4 border-yellow-400 animate-flash chaos-text">
+            <div className="flex items-center justify-center gap-4">
+              <span className="text-2xl">🚨</span>
+              <span>SOLAR ARMAGEDDON! Kp: OVER 9000!</span>
+              <span className="text-2xl">🚨</span>
+            </div>
+            <div className="text-sm text-yellow-200 mt-1">
+              ANNOUNCE WINNERS SOON!
+            </div>
+          </div>
+        </div>
+        
+        {/* Breaking News Ticker */}
+        {chaosIntensity >= 2 && (
+          <div className="w-full overflow-hidden bg-red-900 border-b-2 border-yellow-400 h-8 relative z-40">
+            <div className="flex items-center h-full">
+              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
+                🚨 BREAKING
+              </div>
+              <div className="flex-1 overflow-hidden relative h-full">
+                <div className="absolute whitespace-nowrap text-yellow-300 font-semibold text-sm flex items-center h-full animate-ticker">
+                  GPS SYSTEMS FAILING WORLDWIDE • SOLAR FLARE IMPACT MAXIMUM • EMERGENCY PROTOCOLS ACTIVATED • NAVIGATION COMPROMISED • SYSTEM CRITICAL
+                </div>
+              </div>
+              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
+                🚨
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
@@ -482,9 +630,9 @@ function App() {
                   <span className="text-sm font-medium">Backend: Connected</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className={`w-4 h-4 ${spaceWeather?.risk_level === 'high' ? 'text-red-600' : 'text-yellow-600'}`} />
-                  <span className="text-sm">
-                    {spaceWeather ? `Kp: ${spaceWeather.kp_index}` : 'Loading...'}
+                  <AlertTriangle className={`w-4 h-4 ${chaosMode ? 'text-red-500 animate-ping' : (spaceWeather?.risk_level === 'high' ? 'text-red-600' : 'text-yellow-600')}`} />
+                  <span className={`text-sm font-bold ${chaosMode ? 'text-red-500 animate-pulse' : ''}`}>
+                    {chaosMode ? 'Kp: OVER 9000!!!' : (spaceWeather ? `Kp: ${spaceWeather.kp_index}` : 'Loading...')}
                   </span>
                 </div>
               </div>
@@ -502,6 +650,22 @@ function App() {
                   Login
                 </button>
               )}
+
+              {/* CHAOS HEADER BUTTON */}
+              <button
+                onClick={() => {
+                  const newMode = !chaosMode;
+                  setChaosMode(newMode);
+                  if (newMode) {
+                    setTimeout(() => {
+                      alert("🚨 CHAOS MODE ACTIVATED!\nSystem entering maximum instability!");
+                    }, 100);
+                  }
+                }}
+                className={`px-4 py-2 rounded-lg font-bold transition-all ${chaosMode ? 'bg-gradient-to-r from-red-600 to-red-800 text-white shadow-[0_0_20px_rgba(255,0,0,0.7)] animate-pulse' : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black'}`}
+              >
+                {chaosMode ? '🛑 STOP CHAOS' : '🔥 CHAOS MODE'}
+              </button>
 
               <button onClick={resetSimulation} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">
                 Reset Demo
@@ -546,100 +710,266 @@ function App() {
       )}
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            
-            {/* 1. LIVE SENSOR TOGGLE */}
-            <div className="glass-card p-4 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
-                        <div className="flex flex-col">
-                            <span className="font-bold text-gray-800 leading-tight">Live Phone Sensor</span>
-                            <span className="text-[10px] text-gray-500">Firebase: {realTimeMode ? 'Listening' : 'Idle'}</span>
-                        </div>
-                    </div>
-                    <button onClick={toggleRealTimeMode} className={`px-4 py-2 rounded-lg font-bold text-xs tracking-wide transition-all ${ realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' : 'bg-gray-200 text-gray-600 hover:bg-gray-300' }`}>
-                        {realTimeMode ? 'DISABLE' : 'ENABLE'}
-                    </button>
-                </div>
+<main className="container mx-auto px-4 py-6">
+  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    
+    {/* Left Column - Weather and Globe */}
+    <div className="lg:col-span-1 space-y-6">
+      {/* 1. LIVE SENSOR TOGGLE - Compact version */}
+      <div className="glass-card p-3 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+            <div className="flex flex-col">
+              <span className="font-bold text-gray-800 text-sm leading-tight">Live Sensors</span>
+              <span className="text-[9px] text-gray-500">Firebase: {realTimeMode ? 'Active' : 'Idle'}</span>
             </div>
-
-            {/* 2. SOLAR STORM 3D GLOBE (REPLACES 2D PANEL) */}
-           <div className="h-[500px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
-    <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} />
-</div>
-
-            {/* 3. SIMULATION CONTROLS */}
-            <SpaceWeatherPanel
-              spaceWeather={spaceWeather}
-              onRefresh={fetchSpaceWeather}
-              onSimulate={simulateStorm}
-              simulationMode={simulationMode}
-              loading={loading}
-              hideChart={true} // Optional: If you want to hide the old chart since you have the globe now
-            />
-
-            <ControlPanel
-              routeMode={currentRouteMode}
-              onRouteModeChange={toggleSystemMode}
-              gpsActive={gpsActive}
-              onGPSFailureToggle={handleGPSFailureToggle}
-              vehicleMoving={vehicleMoving}
-              onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
-              onReset={resetSimulation}
-              onSetPoints={() => setActivePointType('selecting')}
-              onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
-              startPoint={startPoint}
-              endPoint={endPoint}
-              onUseDemoRoute={useDemoRoute}
-            />
           </div>
+          <button onClick={toggleRealTimeMode} className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-all ${ realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300' }`}>
+            {realTimeMode ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      </div>
 
-          <div className="lg:col-span-2">
-            <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
-              {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
-              <MapComponent
-                center={mapCenter}
-                zoom={12}
-                heatmapData={heatmapData}
-                routes={routes}
-                vehiclePosition={vehiclePosition}
-                startPoint={startPoint}
-                endPoint={endPoint}
-                gpsActive={gpsActive}
-                imuPath={imuPath}
-                driftPath={driftPath}
-                useIMUNavigation={useIMUNavigation}
-                onMapClick={handleMapClick}
-                onBoundsChange={handleBoundsChange}
-              />
+      {/* 2. SOLAR STORM 3D GLOBE - Smaller */}
+      <div className="h-[300px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
+        <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} compact={true} />
+      </div>
+
+      {/* 3. SPACE WEATHER PANEL - Compact */}
+      <SpaceWeatherPanel
+        spaceWeather={spaceWeather}
+        onRefresh={fetchSpaceWeather}
+        onSimulate={simulateStorm}
+        simulationMode={simulationMode}
+        loading={loading}
+        compact={true}
+      />
+    </div>
+
+    {/* Middle Column - Map */}
+    <div className="lg:col-span-2">
+      <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
+        {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
+        <MapComponent
+          center={mapCenter}
+          zoom={12}
+          heatmapData={heatmapData}
+          routes={routes}
+          vehiclePosition={vehiclePosition}
+          startPoint={startPoint}
+          endPoint={endPoint}
+          gpsActive={gpsActive}
+          imuPath={imuPath}
+          driftPath={driftPath}
+          useIMUNavigation={useIMUNavigation}
+          onMapClick={handleMapClick}
+          onBoundsChange={handleBoundsChange}
+          chaosMode={chaosMode}
+          chaosIntensity={chaosIntensity}
+        />
+      </div>
+
+      {/* Status Bar below map */}
+      <div className="mt-4 p-3 bg-white rounded-lg shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className={`px-2 py-1 rounded-full text-xs font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {gpsActive ? 'GPS Active' : 'IMU Active'}
             </div>
+            {realTimeMode && <div className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Live Mode</div>}
+          </div>
+          <div className="text-xs text-gray-600">
+            {vehiclePosition && <span>Position: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
+          </div>
+        </div>
+      </div>
 
-            <div className="mt-4 p-4 bg-white rounded-lg shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={`px-3 py-1 rounded-full text-sm font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {gpsActive ? 'GPS: Active' : 'GPS: Failed (IMU Active)'}
-                  </div>
-                  {realTimeMode && <div className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">Live Sensors</div>}
-                </div>
-                <div className="text-sm text-gray-600">
-                  {vehiclePosition && <span>Vehicle: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
-                </div>
-              </div>
+      {/* Route Comparison below map */}
+      <div className="mt-4">
+        <RouteComparison
+          routes={routes}
+          currentMode={currentRouteMode}
+          onSelectRoute={toggleSystemMode}
+          compact={true}
+        />
+      </div>
+    </div>
+
+    {/* Right Column - Controls */}
+    <div className="lg:col-span-1 space-y-6">
+      {/* Control Panel - Full height */}
+      <div className="h-full">
+        <ControlPanel
+          routeMode={currentRouteMode}
+          onRouteModeChange={toggleSystemMode}
+          gpsActive={gpsActive}
+          onGPSFailureToggle={handleGPSFailureToggle}
+          vehicleMoving={vehicleMoving}
+          onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
+          onReset={resetSimulation}
+          onSetPoints={() => setActivePointType('selecting')}
+          onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
+          startPoint={startPoint}
+          endPoint={endPoint}
+          onUseDemoRoute={useDemoRoute}
+          compact={false}
+        />
+      </div>
+
+      {/* Additional info/status card */}
+      {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+        <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          System Status
+        </h3>
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">GPS Signal</span>
+            <span className={`text-xs font-medium px-2 py-1 rounded ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {gpsActive ? 'Strong' : 'Weak'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Weather Risk</span>
+            <span className={`text-xs font-medium px-2 py-1 rounded ${
+              spaceWeather?.risk_level === 'high' ? 'bg-red-100 text-red-800' :
+              spaceWeather?.risk_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+              'bg-green-100 text-green-800'
+            }`}>
+              {spaceWeather?.risk_level || 'Low'}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Vehicle</span>
+            <span className="text-xs font-medium text-gray-700">
+              {vehicleMoving ? 'Moving' : 'Stopped'}
+            </span>
+          </div>
+        </div>
+      </div> */}
+
+      {/* Demo Routes Quick Select
+      <div className="bg-white rounded-xl p-4 shadow-sm border">
+        <h3 className="font-bold text-gray-800 mb-3">Quick Routes</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <button 
+            onClick={() => useDemoRoute('SF_OAKLAND')}
+            className="p-2 bg-blue-50 hover:bg-blue-100 rounded-lg text-xs font-medium text-blue-700 transition-colors"
+          >
+            SF → Oakland
+          </button>
+          <button 
+            onClick={() => useDemoRoute('SF_BERKELEY')}
+            className="p-2 bg-green-50 hover:bg-green-100 rounded-lg text-xs font-medium text-green-700 transition-colors"
+          >
+            SF → Berkeley
+          </button>
+          <button 
+            onClick={() => useDemoRoute('SF_SAN_JOSE')}
+            className="p-2 bg-purple-50 hover:bg-purple-100 rounded-lg text-xs font-medium text-purple-700 transition-colors"
+          >
+            SF → San Jose
+          </button>
+          <button 
+            onClick={resetSimulation}
+            className="p-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-medium text-gray-700 transition-colors"
+          >
+            Reset All
+          </button>
+        </div>
+      </div> */}
+    </div>
+  </div>
+
+        {/* CHAOS ERROR POPUPS */}
+{chaosMode && chaosIntensity >= 3 && (
+  <>
+    {[...Array(Math.min(chaosIntensity, 3))].map((_, i) => (
+      <div 
+        key={i}
+        className="fixed z-[10000] p-3 bg-red-900/90 border-2 border-red-600 rounded-lg shadow-lg max-w-xs animate-fade-in"
+        style={{
+          left: `${20 + (i * 25)}%`,
+          top: `${30 + (i * 15)}%`,
+          animationDelay: `${i * 0.5}s`
+        }}
+      >
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 flex-shrink-0" />
+          <div>
+            <div className="font-bold text-red-200 text-sm mb-1">
+              SYSTEM ERROR
             </div>
-
-            <div className="mt-6">
-              <RouteComparison
-                routes={routes}
-                currentMode={currentRouteMode}
-                onSelectRoute={toggleSystemMode}
-              />
+            <div className="text-xs text-white">
+              {[
+                "GPS SIGNAL LOST: Solar interference",
+                "IMU CALIBRATION FAILING",
+                "SATELLITE NETWORK COMPROMISED",
+                "NAVIGATION ACCURACY DEGRADED",
+                "SYSTEM OVERLOAD DETECTED"
+              ][i]}
             </div>
           </div>
         </div>
+      </div>
+    ))}
+  </>
+)}
+
+{/* SYSTEM STATUS HUD */}
+{chaosMode && (
+  <div className="fixed bottom-4 right-4 z-[9999] w-48 bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-red-500">
+    <div className="text-center text-xs text-red-400 font-bold mb-2">
+      SYSTEM STATUS
+    </div>
+    
+    <div className="space-y-2">
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span className="text-gray-300">GPS SIGNAL</span>
+          <span className={`font-bold ${chaosIntensity >= 4 ? 'text-red-400' : 'text-yellow-400'}`}>
+            {chaosIntensity >= 4 ? 'FAILED' : 'UNSTABLE'}
+          </span>
+        </div>
+        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-red-500 transition-all duration-300"
+            style={{ width: `${100 - (chaosIntensity * 20)}%` }}
+          />
+        </div>
+      </div>
+      
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span className="text-gray-300">SYSTEM LOAD</span>
+          <span className="text-red-400 font-bold">{chaosIntensity * 20}%</span>
+        </div>
+        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-yellow-500 transition-all duration-300"
+            style={{ width: `${chaosIntensity * 20}%` }}
+          />
+        </div>
+      </div>
+      
+      <div className="text-center text-[10px] text-gray-400 mt-2">
+        CHAOS LEVEL: {chaosIntensity}/5
+      </div>
+    </div>
+  </div>
+)}
+
+{/* FAKE COUNTDOWN TIMER */}
+{chaosMode && chaosIntensity >= 4 && (
+  <div className="fixed top-24 right-4 z-[9999] animate-pulse">
+    <div className="p-3 bg-red-900/90 border-2 border-red-600 rounded-lg text-center min-w-[140px]">
+      <div className="text-xs text-gray-300 mb-1">SYSTEM FAILURE IN</div>
+      <div className="text-2xl font-mono font-bold text-red-400 mb-2">01:{String(59 - (new Date().getSeconds())).padStart(2, '0')}</div>
+      <div className="text-xs text-red-300">TAKE COVER!</div>
+    </div>
+  </div>
+)}
       </main>
 
       <footer className="mt-8 border-t bg-white py-6">
