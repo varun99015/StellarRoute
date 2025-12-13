@@ -2,7 +2,6 @@ import math
 from typing import List, Tuple
 
 
-
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate great-circle distance between two points in meters"""
     R = 6371000  # Earth radius in meters
