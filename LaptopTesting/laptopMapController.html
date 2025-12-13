@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>StellarRoute • Laptop Map Control</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body,html,#map{height:100%;margin:0}
+    #info{position:absolute;top:10px;left:10px;z-index:1000;background:rgba(0,0,0,0.7);color:#fff;padding:10px;border-radius:6px;font-family:monospace}
+  </style>
+</head>
+<body>
+  <div id="info">
+    <div>StellarRoute Demo • Click map to set start</div>
+    <div>Realtime IMU: <span id="dbstatus">DISCONNECTED</span></div>
+    <div>Speed (m/s): <span id="speed">0</span> • Heading (deg): <span id="heading">0</span></div>
+    <div>Last update: <span id="lastupdate">—</span></div>
+  </div>
+  <div id="map"></div>
+
+  <script type="module" src="./laptop_map_control.js"></script>
+</body>
+</html>
