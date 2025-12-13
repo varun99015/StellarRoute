@@ -3,12 +3,8 @@ import random
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
-from ..models import (
-    GPSFailureSimulation,
-    RiskLevel,
-    SimulationScenario,
-    SpaceWeatherData,
-)
+from ..models import (GPSFailureSimulation, RiskLevel, SimulationScenario,
+                      SpaceWeatherData)
 from .risk_service import RiskAssessmentService
 
 

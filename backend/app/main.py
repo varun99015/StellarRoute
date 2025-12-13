@@ -12,34 +12,19 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import (
-    FastAPI,
-    HTTPException,
-    Request,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
-    status,
-)
+from fastapi import (FastAPI, HTTPException, Request, Response, WebSocket,
+                     WebSocketDisconnect, status)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 
 from .cache.memory_cache import cache
-
 # Assuming these modules exist in your project structure
-from .models import (
-    GPSFailureSimulation,
-    HealthResponse,
-    HeatmapRequest,
-    IMUPathRequest,
-    RouteRequest,
-    RouteResponse,
-    SimulationScenario,
-    SpaceWeatherData,
-    StormSimulationRequest,
-)
+from .models import (GPSFailureSimulation, HealthResponse, HeatmapRequest,
+                     IMUPathRequest, RouteRequest, RouteResponse,
+                     SimulationScenario, SpaceWeatherData,
+                     StormSimulationRequest)
 from .services.heatmap_service import HeatmapGenerator
 from .services.noaa_service import NOAAWeatherService
 from .services.risk_service import RiskAssessmentService
