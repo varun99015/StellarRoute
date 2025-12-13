@@ -110,31 +110,28 @@ const MapComponent = ({
 }) => {
   const mapRef = useRef(null)
 
-  // --- FIXED: Re-added logic to track map movement ---
-  useEffect(() => {
-    if (!mapRef.current) return;
-    
-    const map = mapRef.current;
-    const updateBounds = () => {
-      const bounds = map.getBounds();
-      // Correctly call the prop function
-      onBoundsChange([
-        bounds.getWest(),
-        bounds.getSouth(),
-        bounds.getEast(),
-        bounds.getNorth()
-      ]);
-    };
+useEffect(() => {
+  if (!mapRef.current) return;
 
-    map.on('moveend', updateBounds);
-    updateBounds(); // Initial call
+  const map = mapRef.current;
 
-    return () => {
-      map.off('moveend', updateBounds);
-    };
-  }, [onBoundsChange]);
-  // --------------------------------------------------
-  
+  const updateBounds = () => {
+    const bounds = map.getBounds();
+    onBoundsChange([
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth()
+    ]);
+  };
+
+  map.on("moveend", updateBounds);
+
+  return () => {
+    map.off("moveend", updateBounds);
+  };
+}, []);
+
   // Render heatmap polygons
   const renderHeatmap = () => {
     if (!heatmapData?.features) return null
