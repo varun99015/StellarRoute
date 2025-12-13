@@ -1,22 +1,16 @@
 // frontend/src/services/api.js
-
 import axios from 'axios'
-
 // --- CONFIGURATION UPDATE (CRUCIAL FOR SESSION AUTH) ---
 // 1. Use absolute URL: Get the API URL from environment variables 
-//    (e.g., VITE_API_URL=http://localhost:8000)
+//(e.g., VITE_API_URL=http://localhost:8000)
 // 2. Append the '/api' base path used by your FastAPI app
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000') + '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
-
-  // CRUCIAL FOR BROWNIE CHALLENGE: Session Cookie Handling
-  // This tells the browser to include the session_id cookie 
-  // on cross-origin requests (frontend:5173 -> backend:8000).
   withCredentials: true,
-})
+});
 
 export const stellarRouteAPI = {
   // Space Weather
@@ -58,7 +52,7 @@ export const stellarRouteAPI = {
   },
 
   checkAuthStatus: () => api.get('/auth/status'),
-}
+};
 
 // Helper functions (Unchanged)
 export const calculateBoundingBox = (center, radiusKm = 5) => {
@@ -70,8 +64,8 @@ export const calculateBoundingBox = (center, radiusKm = 5) => {
     lon - lonDelta, // minLon
     lat - latDelta, // minLat
     lon + lonDelta, // maxLon
-    lat + latDelta  // maxLat
+    lat + latDelta // maxLat
   ]
-}
+};
 
-export default api
+export default api;

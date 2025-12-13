@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, Polyline, Polygon, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { RISK_LEVELS } from '../utils/constants'
@@ -31,10 +31,10 @@ const createVehicleIcon = (gpsActive, useIMUNavigation) => {
             <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" />
           </svg>
         </div>
-        ${!gpsActive && `
+        ${!gpsActive ? `
           <div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-pulse border border-white"></div>
           <div class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-ping border border-white"></div>
-        `}
+        ` : ''}
       </div>
     `,
     className: 'vehicle-marker',
@@ -109,6 +109,31 @@ const MapComponent = ({
   onBoundsChange = () => {}
 }) => {
   const mapRef = useRef(null)
+
+  // --- FIXED: Re-added logic to track map movement ---
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    const map = mapRef.current;
+    const updateBounds = () => {
+      const bounds = map.getBounds();
+      // Correctly call the prop function
+      onBoundsChange([
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth()
+      ]);
+    };
+
+    map.on('moveend', updateBounds);
+    updateBounds(); // Initial call
+
+    return () => {
+      map.off('moveend', updateBounds);
+    };
+  }, [onBoundsChange]);
+  // --------------------------------------------------
   
   // Render heatmap polygons
   const renderHeatmap = () => {
@@ -151,7 +176,7 @@ const MapComponent = ({
   const renderRoutes = () => {
     const elements = []
     
-    // 1. Render DRIFTED Route (The "False" GPS path) - Render first so it's below
+    // 1. Render DRIFTED Route (The "False" GPS path)
     if (routes.drifted?.path) {
       elements.push(
         <Polyline
