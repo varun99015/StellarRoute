@@ -3,7 +3,10 @@ import { Navigation, Shield, Clock, MapPin, AlertTriangle, TrendingUp } from 'lu
 import { RISK_LEVELS } from '../utils/constants'
 
 const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
-  if (!routes || (!routes.normal && !routes.safe)) {
+  // Determine if we have a valid route set to compare
+  const hasRoutes = routes && (routes.normal || routes.safe)
+  
+  if (!hasRoutes) {
     return (
       <div className="glass-card p-6 rounded-xl">
         <div className="flex items-center justify-center h-40">
@@ -13,7 +16,10 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
     )
   }
   
-  const normalRoute = routes.normal
+  // LOGIC CHANGE: If a drifted route exists (Storm Active), use it for the "Normal" comparison
+  // This shows the user the "Real World" bad outcome of using normal GPS
+  const isDrifting = !!routes.drifted
+  const normalRoute = isDrifting ? routes.drifted : routes.normal
   const safeRoute = routes.safe
   
   const formatTime = (seconds) => {
@@ -29,33 +35,34 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
     return `${(meters / 1000).toFixed(1)}km`
   }
   
-  const calculateDifference = (normal, safe, type) => {
-    if (normal === undefined || safe === undefined) return 'N/A'
-    
-    // FIX: Division by zero protection
-    if (normal === 0) {
-        if (type === 'risk') return safe === 0 ? '0%' : '+100%'
-        // For distance/time, 0 is unlikely but safe to handle
-        if (safe === 0) return '0%'
-        return '+100%'
-    }
+  const calculateDifference = (normalVal, safeVal, type) => {
+    if (normalVal === undefined || safeVal === undefined) return 'N/A'
+    if (normalVal === 0) return safeVal === 0 ? '0%' : '+100%'
 
-    if (type === 'distance') {
-      const diff = safe - normal
-      const percent = (diff / normal) * 100
-      return `${percent > 0 ? '+' : ''}${percent.toFixed(0)}%`
-    }
-    
-    if (type === 'time') {
-      const diff = safe - normal
-      const percent = (diff / normal) * 100
-      return `${percent > 0 ? '+' : ''}${percent.toFixed(0)}%`
+    if (type === 'distance' || type === 'time') {
+      const diff = safeVal - normalVal
+      const percent = (diff / normalVal) * 100
+      // If Safe is 'better' (less distance/time), show green
+      const isBetter = percent < 0
+      const sign = percent > 0 ? '+' : ''
+      return (
+        <span className={isBetter ? 'text-green-600' : 'text-orange-600'}>
+          {sign}{percent.toFixed(0)}%
+        </span>
+      )
     }
     
     if (type === 'risk') {
-      const diff = normal - safe
-      const percent = (diff / normal) * 100
-      return `${percent > 0 ? '-' : '+'}${percent.toFixed(0)}%`
+      const diff = safeVal - normalVal // e.g. 20 - 80 = -60
+      const percent = (diff / normalVal) * 100
+      // If Safe is 'better' (less risk), show green
+      const isBetter = percent < 0
+      const sign = percent > 0 ? '+' : ''
+      return (
+        <span className={isBetter ? 'text-green-600' : 'text-red-600'}>
+          {sign}{percent.toFixed(0)}%
+        </span>
+      )
     }
     
     return 'N/A'
@@ -76,7 +83,7 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
         >
           <div className="flex items-center justify-center gap-2">
             <Navigation className="w-4 h-4" />
-            Normal Route
+            Normal
           </div>
         </button>
         <button
@@ -85,7 +92,7 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
         >
           <div className="flex items-center justify-center gap-2">
             <Shield className="w-4 h-4" />
-            Safe Route
+            Storm-Safe
           </div>
         </button>
       </div>
@@ -95,10 +102,20 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="py-3 px-4 text-left text-sm font-medium text-gray-700">Metric</th>
-              <th className="py-3 px-4 text-left text-sm font-medium text-gray-700">Normal</th>
-              <th className="py-3 px-4 text-left text-sm font-medium text-gray-700">Safe</th>
-              <th className="py-3 px-4 text-left text-sm font-medium text-gray-700">Difference</th>
+              <th className="py-3 px-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Metric</th>
+              <th className="py-3 px-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">
+                {isDrifting ? (
+                  <span className="text-red-600 flex items-center gap-1">
+                    Normal <span className="text-[10px] bg-red-100 px-1 rounded">DRIFTING</span>
+                  </span>
+                ) : (
+                  "Normal"
+                )}
+              </th>
+              <th className="py-3 px-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider text-green-700">
+                Safe
+              </th>
+              <th className="py-3 px-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Diff</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
@@ -107,19 +124,19 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
               <td className="py-3 px-4">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Distance</span>
+                  <span className="text-sm font-medium text-gray-700">Distance</span>
                 </div>
               </td>
               <td className="py-3 px-4">
-                <span className="font-medium">{formatDistance(normalRoute?.distance_m || 0)}</span>
-              </td>
-              <td className="py-3 px-4">
-                <span className="font-medium text-green-600">{formatDistance(safeRoute?.distance_m || 0)}</span>
-              </td>
-              <td className="py-3 px-4">
-                <span className={`text-sm ${calculateDifference(normalRoute?.distance_m, safeRoute?.distance_m, 'distance').includes('+') ? 'text-red-600' : 'text-green-600'}`}>
-                  {calculateDifference(normalRoute?.distance_m, safeRoute?.distance_m, 'distance')}
+                <span className={`font-medium ${isDrifting ? 'text-red-600' : 'text-gray-900'}`}>
+                  {formatDistance(normalRoute?.distance_m || 0)}
                 </span>
+              </td>
+              <td className="py-3 px-4">
+                <span className="font-medium text-green-700">{formatDistance(safeRoute?.distance_m || 0)}</span>
+              </td>
+              <td className="py-3 px-4 text-sm font-medium">
+                {calculateDifference(normalRoute?.distance_m, safeRoute?.distance_m, 'distance')}
               </td>
             </tr>
             
@@ -128,19 +145,17 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
               <td className="py-3 px-4">
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Estimated Time</span>
+                  <span className="text-sm font-medium text-gray-700">Est. Time</span>
                 </div>
               </td>
               <td className="py-3 px-4">
                 <span className="font-medium">{formatTime(normalRoute?.estimated_time_s || 0)}</span>
               </td>
               <td className="py-3 px-4">
-                <span className="font-medium text-green-600">{formatTime(safeRoute?.estimated_time_s || 0)}</span>
+                <span className="font-medium text-green-700">{formatTime(safeRoute?.estimated_time_s || 0)}</span>
               </td>
-              <td className="py-3 px-4">
-                <span className={`text-sm ${calculateDifference(normalRoute?.estimated_time_s, safeRoute?.estimated_time_s, 'time').includes('+') ? 'text-red-600' : 'text-green-600'}`}>
-                  {calculateDifference(normalRoute?.estimated_time_s, safeRoute?.estimated_time_s, 'time')}
-                </span>
+              <td className="py-3 px-4 text-sm font-medium">
+                {calculateDifference(normalRoute?.estimated_time_s, safeRoute?.estimated_time_s, 'time')}
               </td>
             </tr>
             
@@ -149,7 +164,7 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
               <td className="py-3 px-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Risk Score</span>
+                  <span className="text-sm font-medium text-gray-700">Risk Score</span>
                 </div>
               </td>
               <td className="py-3 px-4">
@@ -161,13 +176,11 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
               <td className="py-3 px-4">
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${RISK_LEVELS[safeRoute?.max_risk_zone]?.bg || 'bg-gray-300'}`}></div>
-                  <span className="font-medium text-green-600">{safeRoute?.total_risk_score?.toFixed(0) || 0}/100</span>
+                  <span className="font-medium text-green-700">{safeRoute?.total_risk_score?.toFixed(0) || 0}/100</span>
                 </div>
               </td>
-              <td className="py-3 px-4">
-                <span className={`text-sm ${calculateDifference(normalRoute?.total_risk_score, safeRoute?.total_risk_score, 'risk').includes('-') ? 'text-green-600' : 'text-red-600'}`}>
-                  {calculateDifference(normalRoute?.total_risk_score, safeRoute?.total_risk_score, 'risk')}
-                </span>
+              <td className="py-3 px-4 text-sm font-medium">
+                {calculateDifference(normalRoute?.total_risk_score, safeRoute?.total_risk_score, 'risk')}
               </td>
             </tr>
             
@@ -176,7 +189,7 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
               <td className="py-3 px-4">
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Max Risk Zone</span>
+                  <span className="text-sm font-medium text-gray-700">Risk Zone</span>
                 </div>
               </td>
               <td className="py-3 px-4">
@@ -190,11 +203,10 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
                 </span>
               </td>
               <td className="py-3 px-4">
-                <span className={`text-sm ${
-                  normalRoute?.max_risk_zone === 'high' && safeRoute?.max_risk_zone === 'low' ? 'text-green-600' :
-                  normalRoute?.max_risk_zone === safeRoute?.max_risk_zone ? 'text-gray-600' : 'text-yellow-600'
+                <span className={`text-sm font-medium ${
+                  normalRoute?.max_risk_zone === safeRoute?.max_risk_zone ? 'text-gray-400' : 'text-green-600'
                 }`}>
-                  {normalRoute?.max_risk_zone === safeRoute?.max_risk_zone ? 'Same' : 'Improved'}
+                  {normalRoute?.max_risk_zone === safeRoute?.max_risk_zone ? '—' : 'Improved'}
                 </span>
               </td>
             </tr>
@@ -202,14 +214,23 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
         </table>
       </div>
       
-      {/* Summary */}
-      <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
-        <div className="text-sm font-medium text-blue-800 mb-2">Summary</div>
-        <div className="text-sm text-blue-700">
-          {currentMode === 'normal' ? (
-            <>Normal route is <span className="font-semibold">{formatDistance(normalRoute?.distance_m || 0)}</span> with <span className="font-semibold">{normalRoute?.total_risk_score?.toFixed(0) || 0}/100</span> risk score</>
+      {/* Dynamic Summary */}
+      <div className={`mt-6 p-4 rounded-lg border ${isDrifting ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
+        <div className={`text-sm font-bold mb-2 ${isDrifting ? 'text-red-800' : 'text-blue-800'}`}>
+          {isDrifting ? '⚠️ WARNING: GPS DEGRADATION DETECTED' : 'System Status: Normal'}
+        </div>
+        <div className={`text-sm ${isDrifting ? 'text-red-700' : 'text-blue-700'}`}>
+          {isDrifting ? (
+            <>
+              Normal GPS route is drifting by significant margins. 
+              Switching to <b>Storm-Safe</b> mode reduces risk score by 
+              <b> {calculateDifference(normalRoute?.total_risk_score, safeRoute?.total_risk_score, 'risk')}</b>.
+            </>
           ) : (
-            <>Safe route adds <span className="font-semibold">{calculateDifference(normalRoute?.distance_m, safeRoute?.distance_m, 'distance')}</span> distance but reduces risk by <span className="font-semibold">{calculateDifference(normalRoute?.total_risk_score, safeRoute?.total_risk_score, 'risk')}</span></>
+            <>
+              Conditions are stable. Normal route is optimal. 
+              Safe route adds <b>{calculateDifference(normalRoute?.distance_m, safeRoute?.distance_m, 'distance')}</b> distance.
+            </>
           )}
         </div>
       </div>
@@ -218,13 +239,21 @@ const RouteComparison = ({ routes, currentMode, onSelectRoute }) => {
       <div className="flex gap-3 mt-6">
         <button
           onClick={() => onSelectRoute('normal')}
-          className={`flex-1 py-3 rounded-lg font-medium ${currentMode === 'normal' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+            currentMode === 'normal' 
+              ? 'bg-blue-600 text-white shadow-md' 
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
         >
           Use Normal Route
         </button>
         <button
           onClick={() => onSelectRoute('safe')}
-          className={`flex-1 py-3 rounded-lg font-medium ${currentMode === 'safe' ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+          className={`flex-1 py-3 rounded-lg font-medium transition-colors ${
+            currentMode === 'safe' 
+              ? 'bg-green-600 text-white shadow-md' 
+              : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'
+          }`}
         >
           Use Safe Route
         </button>

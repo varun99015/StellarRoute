@@ -100,31 +100,37 @@ class RoadNetworkRouter:
     ) -> List[List[float]]:
         """
         Generate a 'drifted' version of the path to simulate GPS error.
-        Higher Kp index = larger systematic bias + more random noise.
+        Only generates significant drift if Kp is high (Real NOAA Data or Simulation).
         """
         if not path:
             return []
 
+        # Seed random with path geometry so drift is consistent for the same route
+        seed_val = int(len(path) * 1000 + path[0][0] * 100 + kp_index * 10)
+        random.seed(seed_val)
+
         drifted_path = []
 
-        # --- DRASTICALLY INCREASED DRIFT SCALES FOR DEMO VISIBILITY ---
+        # --- DRIFT SCALING BASED ON Kp ---
         if kp_index < 4:
-            # Low Risk: Minor jitter (20m)
-            bias_scale = 20
-            noise_scale = 10
+            # NORMAL MODE (REALITY): GPS is accurate.
+            # Almost zero drift (2-5 meters is standard GPS margin of error)
+            # This effectively "removes the guessing" for normal conditions.
+            bias_scale = 2
+            noise_scale = 3
         elif kp_index < 7:
-            # Moderate Risk: Significant drift (200m) - clearly off-road
-            bias_scale = 200
-            noise_scale = 50
+            # MODERATE STORM: Significant drift (500m)
+            bias_scale = 500
+            noise_scale = 100
         else:
-            # Severe Risk: Massive drift (800m) - completely wrong block/neighborhood
-            bias_scale = 800
-            noise_scale = 150
+            # SEVERE STORM: Extreme drift (2.5 km)
+            bias_scale = 2500
+            noise_scale = 400
 
-        # Random initial direction for the "Systematic Bias" (Ionospheric shift)
+        # Random initial direction for the "Systematic Bias"
         angle = random.uniform(0, 2 * math.pi)
 
-        # Pre-calculate base bias in degrees (approx 111,000 meters per degree)
+        # Pre-calculate base bias in degrees
         base_lat_bias = (bias_scale * math.sin(angle)) / 111000
         base_lon_bias = (bias_scale * math.cos(angle)) / 111000
 
@@ -134,11 +140,12 @@ class RoadNetworkRouter:
             lat_noise = (random.uniform(-1, 1) * noise_scale) / 111000
             lon_noise = (random.uniform(-1, 1) * noise_scale) / 111000
 
-            # 2. "Wandering" Bias:
-            # Instead of a constant offset, make the bias wave back and forth slowly
-            # This simulates satellite geometry changing or signal multipath shifting
-            # Increased frequency (i / 10.0 instead of i / 20.0) for more "wobble"
-            wander_factor = math.sin(i / 10.0) * 0.5
+            # 2. "Wandering" Bias
+            # Only apply significant wander if we are actually drifting
+            if kp_index >= 4:
+                wander_factor = math.sin(i / 5.0) * 0.8
+            else:
+                wander_factor = 0  # Stable path for normal mode
 
             current_lat_bias = base_lat_bias * (1 + wander_factor)
             current_lon_bias = base_lon_bias * (1 + wander_factor)
@@ -168,8 +175,8 @@ class RoadNetworkRouter:
             }
 
             # DRIFTED ROUTE (Simulated GPS Error)
-            # Only generate noticeable drift if Kp is elevated (Moderate/Severe)
-            # Or always generate it but it will be small for Low Kp
+            # Will be nearly identical to Normal if Kp < 4 (Real Data)
+            # Will be wildly different if Kp >= 4 (Simulated or Real Storm)
             drifted_coords = self._generate_drifted_path(road_path, kp_index)
             drifted_metrics = self.calculate_route_metrics(
                 drifted_coords, kp_index, scenario

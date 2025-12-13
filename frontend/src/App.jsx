@@ -1,7 +1,5 @@
-//StellarRoute\frontend\src\App.jsx
-
 import React, { useState, useEffect, useRef } from 'react'
-import { AlertTriangle, Navigation2, Satellite, MapPin, Target } from 'lucide-react'
+import { AlertTriangle, Navigation2, Satellite, MapPin, Target, Wifi } from 'lucide-react'
 import MapComponent from './components/MapComponent'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import ControlPanel from './components/ControlPanel'
@@ -11,13 +9,32 @@ import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 import LoginModal from './components/LoginModal';
 
+// --- FIREBASE IMPORTS ---
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, onValue } from "firebase/database";
+import { firebaseConfig } from './firebaseConfig'; // Importing credentials
+
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
+
 function App() {
+  // --- AUTHENTICATION STATE (FIXED: Loads from Session) ---
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    // Check storage immediately on load
+    return sessionStorage.getItem('stellar_isLoggedIn') === 'true';
+  });
   
-  // --- AUTHENTICATION STATE ---
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState(() => {
+    return sessionStorage.getItem('stellar_userName');
+  });
+
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [userName, setUserName] = useState(null);
   
+  // --- REAL-TIME SENSOR STATE ---
+  const [realTimeMode, setRealTimeMode] = useState(false);
+  const [lastSensorTime, setLastSensorTime] = useState(0);
+
   // --- CORE STATE ---
   const [spaceWeather, setSpaceWeather] = useState(null)
   const [heatmapData, setHeatmapData] = useState(null)
@@ -47,18 +64,106 @@ function App() {
   const imuNavigatorRef = useRef(null)
   const lastPositionRef = useRef(null) 
 
+  // --- SESSION PERSISTENCE EFFECT ---
+  // This saves the login state whenever it changes
   useEffect(() => {
-    stellarRouteAPI.checkAuthStatus()
-      .then(response => {
-        if (response.data.status === 'authenticated') {
-          setIsLoggedIn(true);
-          setUserName(response.data.user_email);
-        }
-      })
-      .catch(() => {
-        // User is not logged in, do nothing (default is false)
-      });
-  }, []);
+    sessionStorage.setItem('stellar_isLoggedIn', isLoggedIn);
+    if (userName) {
+      sessionStorage.setItem('stellar_userName', userName);
+    } else {
+      sessionStorage.removeItem('stellar_userName');
+    }
+  }, [isLoggedIn, userName]);
+
+  // --- MATH HELPER FOR REAL-TIME ---
+  const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
+      // Earth Radius (m)
+      const R = 6371e3;
+      
+      // Time delta (seconds)
+      const now = sensorData.timestamp;
+      // If first packet or reset, assume small delta
+      const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
+      
+      // Ignore large gaps/lag (prevents jumps)
+      if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
+
+      // Speed (km/h -> m/s)
+      const speed = (sensorData.speed || 0) / 3.6;
+      
+      // Distance moved
+      const d = speed * dt;
+      
+      // Bearing (Degrees -> Radians)
+      const brng = (sensorData.heading || 0) * Math.PI / 180;
+      
+      const lat1 = currentLat * Math.PI / 180;
+      const lon1 = currentLon * Math.PI / 180;
+
+      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d/R) +
+                  Math.cos(lat1) * Math.sin(d/R) * Math.cos(brng));
+      
+      const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d/R) * Math.cos(lat1),
+                           Math.cos(d/R) - Math.sin(lat1) * Math.sin(lat2));
+
+      return {
+          lat: lat2 * 180 / Math.PI,
+          lon: lon2 * 180 / Math.PI,
+          timestamp: now
+      };
+  }
+
+  // --- FIREBASE LISTENER WITH DEBUG LOGS ---
+  useEffect(() => {
+    if (realTimeMode) {
+        console.log("%c📡 CONNECTED TO FIREBASE - LISTENING FOR SENSORS...", "color: green; font-weight: bold; font-size: 14px;");
+        
+        const sensorRef = ref(db, 'vehicle_control');
+        
+        const unsubscribe = onValue(sensorRef, (snapshot) => {
+            const data = snapshot.val();
+            
+            if (data && lastPositionRef.current) {
+                // LOG 1: RAW INCOMING DATA
+                console.groupCollapsed(`[Sensor Packet] ${new Date().toLocaleTimeString()}`);
+                console.log(`📱 Raw Phone Data:`, data);
+                console.log(`🚀 Speed: ${data.speed} km/h`);
+                console.log(`🧭 Heading: ${data.heading}°`);
+                
+                // Calculate Dead Reckoning
+                const newPos = calculateNewPosition(
+                    lastPositionRef.current[0],
+                    lastPositionRef.current[1],
+                    data,
+                    lastSensorTime
+                );
+                
+                // LOG 2: MATH & RESULT
+                console.log(`📍 Previous Position: ${lastPositionRef.current[0].toFixed(6)}, ${lastPositionRef.current[1].toFixed(6)}`);
+                console.log(`➕ Computed Offset: Moving ${(data.speed/3.6).toFixed(2)} m/s for ${((data.timestamp - lastSensorTime)/1000).toFixed(3)}s`);
+                console.log(`🎯 NEW Position: ${newPos.lat.toFixed(6)}, ${newPos.lon.toFixed(6)}`);
+                console.groupEnd();
+
+                // Update React State & Refs
+                setLastSensorTime(newPos.timestamp);
+                setVehiclePosition([newPos.lat, newPos.lon]);
+                lastPositionRef.current = [newPos.lat, newPos.lon];
+                
+                // Leave a trail
+                setDriftPath(prev => {
+                    const newPath = [...prev, [newPos.lat, newPos.lon]];
+                    if (newPath.length > 500) return newPath.slice(newPath.length - 500);
+                    return newPath;
+                });
+            }
+        });
+        
+        return () => {
+            console.log("%c🔌 DISCONNECTED FROM LIVE SENSORS", "color: red; font-weight: bold;");
+            unsubscribe();
+        };
+    }
+  }, [realTimeMode, lastSensorTime]);
 
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
@@ -75,6 +180,7 @@ function App() {
     } finally {
       setIsLoggedIn(false);
       setUserName(null);
+      sessionStorage.clear(); // Clear storage on logout
     }
   };
 
@@ -82,9 +188,8 @@ function App() {
   useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
-    imuNavigatorRef.current = new IMUNavigator(startPoint)
+    imuNavigatorRef.current = new VehicleAnimator([startPoint])
     
-    // Auto-start demo route
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
@@ -124,16 +229,27 @@ function App() {
       setRoutes(data.alternatives || {})
       setCurrentRouteMode(mode)
 
-      const routePath = data.route?.path || [start, end]
+      let routePath = data.route?.path || [start, end]
       
-      // If NOT currently moving, reset vehicle to start
+      if (mode === 'normal' && simulationMode && data.alternatives?.drifted?.path) {
+          routePath = data.alternatives.drifted.path;
+      } else if (data.alternatives?.normal?.path) {
+          routePath = data.alternatives.normal.path;
+      }
+
       if (!vehicleMoving) {
         vehicleAnimatorRef.current = new VehicleAnimator(routePath)
         setVehiclePosition(routePath[0])
         lastPositionRef.current = routePath[0]
       }
       
-      if (start && end) calculateIMUPath(start, end)
+      if (start && end) {
+          if (data.alternatives?.safe?.path) {
+              setImuPath(data.alternatives.safe.path);
+          } else {
+              calculateIMUPath(start, end);
+          }
+      }
       
     } catch (error) {
       console.error('Error calculating route:', error)
@@ -160,7 +276,10 @@ function App() {
       const response = await stellarRouteAPI.simulateStorm(scenario, mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
       setSimulationMode(true)
-      if (startPoint && endPoint) calculateRoute(startPoint, endPoint, currentRouteMode)
+      
+      if (startPoint && endPoint) {
+          calculateRoute(startPoint, endPoint, currentRouteMode)
+      }
     } catch (error) { console.error(error); setLoading(false) }
   }
   
@@ -182,21 +301,11 @@ function App() {
       setStartPoint(coords)
       setVehiclePosition(coords)
       lastPositionRef.current = coords
-      
-      // If end point exists, recalculate route immediately
-      if (endPoint) {
-        calculateRoute(coords, endPoint, currentRouteMode)
-      }
+      if (endPoint) calculateRoute(coords, endPoint, currentRouteMode)
     } else if (activePointType === 'end') {
       setEndPoint(coords)
-      
-      // If start point exists, recalculate route immediately
-      if (startPoint) {
-        calculateRoute(startPoint, coords, currentRouteMode)
-      }
+      if (startPoint) calculateRoute(startPoint, coords, currentRouteMode)
     }
-    
-    // Turn off selection mode after setting a point
     setActivePointType(null)
   }
 
@@ -205,7 +314,6 @@ function App() {
     fetchHeatmap(bounds)
   }
 
-  // --- SIMULATION LOGIC ---
   const findClosestPathIndex = (position, path) => {
     if (!position || !path || path.length === 0) return 0
     let minDist = Infinity
@@ -224,92 +332,118 @@ function App() {
     return closestIndex
   }
 
-  const toggleGPSFailure = () => {
-    const newGPSState = !gpsActive
-    setGPSActive(newGPSState)
+  // --- MODE SWITCHERS ---
+  const toggleSystemMode = (targetMode) => {
+    const isSafeMode = targetMode === 'safe';
+    setCurrentRouteMode(targetMode);
     
-    const currentPos = vehiclePosition || startPoint
-    lastPositionRef.current = currentPos 
+    const shouldGPSBeActive = !isSafeMode; 
+    setGPSActive(shouldGPSBeActive);
     
-    if (newGPSState === false) {
-      // ENTERING FAILURE MODE
-      const riskLevel = spaceWeather?.risk_level || 'medium'
-      const driftSeverity = (spaceWeather?.kp_index || 0) < 4 ? 'low' : (spaceWeather?.kp_index || 0) < 7 ? 'medium' : 'high'
-      
-      gpsSimulatorRef.current = new GPSSimulator(currentPos)
-      gpsSimulatorRef.current.simulateGPSFailure(riskLevel, driftSeverity)
-      
-      const activePath = imuPath.length > 0 ? imuPath : (routes[currentRouteMode]?.path || [])
-      const closestIndex = findClosestPathIndex(currentPos, activePath)
-      const remainingPath = activePath.slice(closestIndex)
-      
-      if (remainingPath.length > 0) {
-        imuNavigatorRef.current = new IMUNavigator(currentPos, remainingPath)
-      }
+    const currentPos = vehiclePosition || startPoint;
+    lastPositionRef.current = currentPos;
 
-      setUseIMUNavigation(true) 
-      
+    if (!shouldGPSBeActive) {
+      // Safe Mode (IMU)
+      const targetPath = imuPath.length > 0 ? imuPath : (routes.safe?.path || routes.normal?.path || []);
+      if (targetPath.length > 0) {
+          const closestIndex = findClosestPathIndex(currentPos, targetPath);
+          const remainingPath = targetPath.slice(closestIndex);
+          imuNavigatorRef.current = new VehicleAnimator(remainingPath);
+      }
+      setUseIMUNavigation(true);
     } else {
-      // RESTORING GPS
-      if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS()
+      // Normal Mode (GPS)
+      let targetPath = routes.normal?.path || [];
       
-      if (vehicleAnimatorRef.current) {
-        const truePos = vehicleAnimatorRef.current.update() 
-        setVehiclePosition(truePos)
-        lastPositionRef.current = truePos
+      if (simulationMode && routes.drifted?.path && routes.drifted.path.length > 0) {
+          targetPath = routes.drifted.path;
       }
-      
-      setUseIMUNavigation(false)
-      setDriftPath([])
-    }
-  }
 
-  // Animation Loop
+      if (targetPath.length > 0) {
+          const closestIndex = findClosestPathIndex(currentPos, targetPath);
+          const remainingPath = targetPath.slice(closestIndex);
+          vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
+      }
+
+      if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS();
+      setUseIMUNavigation(false);
+      setDriftPath([]); 
+    }
+  };
+
+  const handleGPSFailureToggle = () => {
+      const newMode = gpsActive ? 'safe' : 'normal';
+      toggleSystemMode(newMode);
+  };
+
+  // Toggle for Real-Time Phone Sensor Mode
+  const toggleRealTimeMode = () => {
+      const newState = !realTimeMode;
+      setRealTimeMode(newState);
+      
+      if (newState) {
+          // Entering Real-Time Mode: Stop internal simulators
+          setVehicleMoving(false); 
+          setGPSActive(false);     
+          setUseIMUNavigation(true); 
+          setDriftPath([]);        
+          setLastSensorTime(0);    
+          alert("Real-Time Mode Active! Move your phone to navigate.");
+      } else {
+          // Exiting: Restore basic state
+          setGPSActive(true);
+          setUseIMUNavigation(false);
+      }
+  };
+
+  // --- ANIMATION LOOP ---
   useEffect(() => {
     let animationId
     const animate = () => {
-      if (vehicleAnimatorRef.current && vehicleMoving) {
-        const actualPosition = vehicleAnimatorRef.current.update()
-        let displayPosition = actualPosition
-        
-        if (!gpsActive) {
-          if (useIMUNavigation && imuNavigatorRef.current) {
-             // IMU Mode
-             displayPosition = imuNavigatorRef.current.update() 
-          } else if (gpsSimulatorRef.current) {
-             // Drift Mode
-             displayPosition = gpsSimulatorRef.current.updatePosition(
-                actualPosition,
-                spaceWeather?.risk_level
-             )
-             setDriftPath(prev => [...prev, displayPosition])
-          }
-        }
+      // **CRITICAL**: Only run the internal animation if we are NOT in Real-Time Mode
+      if (vehicleMoving && !realTimeMode) {
+        let displayPosition;
 
-        setVehiclePosition(displayPosition)
-        
-        if (vehicleAnimatorRef.current.isMoving) {
-          animationId = requestAnimationFrame(animate)
+        if (gpsActive) {
+             if (vehicleAnimatorRef.current) {
+                 displayPosition = vehicleAnimatorRef.current.update();
+             }
         } else {
-          setVehicleMoving(false)
-          if (!gpsActive) console.log('Journey complete (IMU Mode)')
+             if (imuNavigatorRef.current) {
+                 displayPosition = imuNavigatorRef.current.update();
+             }
         }
+        
+        if (displayPosition) {
+            setVehiclePosition(displayPosition);
+            
+            const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
+            if (currentAnimator && !currentAnimator.isMoving) {
+                 setVehicleMoving(false);
+            }
+        }
+        
+        animationId = requestAnimationFrame(animate);
       }
     }
 
-    if (vehicleMoving) {
-      vehicleAnimatorRef.current?.start()
+    if (vehicleMoving && !realTimeMode) {
+      if (gpsActive) vehicleAnimatorRef.current?.start();
+      else imuNavigatorRef.current?.start();
       animationId = requestAnimationFrame(animate)
     } else {
       vehicleAnimatorRef.current?.pause()
+      imuNavigatorRef.current?.pause()
       if (animationId) cancelAnimationFrame(animationId)
     }
 
     return () => { if (animationId) cancelAnimationFrame(animationId) }
-  }, [vehicleMoving, gpsActive, useIMUNavigation, spaceWeather])
+  }, [vehicleMoving, gpsActive, useIMUNavigation, realTimeMode])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
+    setRealTimeMode(false) // Turn off live mode on reset
     setGPSActive(true)
     setUseIMUNavigation(false)
     setDriftPath([])
@@ -322,7 +456,7 @@ function App() {
     
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
-      const route = routes[currentRouteMode]?.path || [startPoint, endPoint]
+      const route = routes.normal?.path || [startPoint, endPoint]
       vehicleAnimatorRef.current = new VehicleAnimator(route)
     }
   }
@@ -385,7 +519,7 @@ function App() {
                   onClick={() => setShowLoginModal(true)}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  Login (Challenge)
+                  Login
                 </button>
               )}
 
@@ -400,66 +534,37 @@ function App() {
         </div>
       </header>
       
-      {/* --- RESTORED POINT SELECTION MODAL --- */}
+      {/* POINT SELECTION MODAL */}
       {activePointType === 'selecting' && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-fade-in">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] animate-fade-in">
           <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full mx-4">
             <h3 className="text-lg font-bold mb-4 text-gray-800">Set Point on Map</h3>
             <p className="text-gray-600 mb-6">Choose which point you want to set, then click on the map.</p>
-            
             <div className="grid grid-cols-2 gap-4 mb-6">
-              <button
-                onClick={() => setActivePointType('start')}
-                className="p-4 border-2 border-blue-100 bg-blue-50 rounded-xl hover:bg-blue-100 hover:border-blue-300 transition-all group"
-              >
+              <button onClick={() => setActivePointType('start')} className="p-4 border-2 border-blue-100 bg-blue-50 rounded-xl hover:bg-blue-100 transition-all group">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 bg-blue-500 rounded-full text-white shadow-md group-hover:scale-110 transition-transform">
-                    <MapPin className="w-6 h-6" />
-                  </div>
+                  <div className="p-3 bg-blue-500 rounded-full text-white shadow-md group-hover:scale-110"><MapPin className="w-6 h-6" /></div>
                   <span className="font-semibold text-blue-700">Set Start</span>
                 </div>
               </button>
-              
-              <button
-                onClick={() => setActivePointType('end')}
-                className="p-4 border-2 border-green-100 bg-green-50 rounded-xl hover:bg-green-100 hover:border-green-300 transition-all group"
-              >
+              <button onClick={() => setActivePointType('end')} className="p-4 border-2 border-green-100 bg-green-50 rounded-xl hover:bg-green-100 transition-all group">
                 <div className="flex flex-col items-center gap-2">
-                  <div className="p-3 bg-green-500 rounded-full text-white shadow-md group-hover:scale-110 transition-transform">
-                    <Target className="w-6 h-6" />
-                  </div>
+                  <div className="p-3 bg-green-500 rounded-full text-white shadow-md group-hover:scale-110"><Target className="w-6 h-6" /></div>
                   <span className="font-semibold text-green-700">Set End</span>
                 </div>
               </button>
             </div>
-            
-            <button
-              onClick={() => setActivePointType(null)}
-              className="w-full py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
+            <button onClick={() => setActivePointType(null)} className="w-full py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200">Cancel</button>
           </div>
         </div>
       )}
       
-      {/* VISUAL INDICATOR FOR ACTIVE SELECTION MODE */}
+      {/* SELECTION INDICATOR */}
       {(activePointType === 'start' || activePointType === 'end') && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
-          {activePointType === 'start' ? (
-            <MapPin className="w-5 h-5 text-blue-400" />
-          ) : (
-            <Target className="w-5 h-5 text-green-400" />
-          )}
-          <span className="font-medium">
-            Click on map to set {activePointType === 'start' ? 'Start Point' : 'End Point'}
-          </span>
-          <button 
-            onClick={() => setActivePointType(null)}
-            className="ml-2 p-1 hover:bg-white/20 rounded-full"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-          </button>
+        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[2000] bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
+          {activePointType === 'start' ? <MapPin className="w-5 h-5 text-blue-400" /> : <Target className="w-5 h-5 text-green-400" />}
+          <span className="font-medium">Click on map to set {activePointType === 'start' ? 'Start Point' : 'End Point'}</span>
+          <button onClick={() => setActivePointType(null)} className="ml-2 p-1 hover:bg-white/20 rounded-full">✕</button>
         </div>
       )}
 
@@ -467,6 +572,28 @@ function App() {
       <main className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
+            
+            {/* LIVE SENSOR TOGGLE */}
+            <div className="glass-card p-4 rounded-xl border-2 border-purple-500 shadow-sm">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+                        <div className="flex flex-col">
+                            <span className="font-bold text-gray-800 leading-tight">Live Phone Sensor</span>
+                            <span className="text-[10px] text-gray-500">Firebase: {realTimeMode ? 'Listening' : 'Idle'}</span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={toggleRealTimeMode}
+                        className={`px-4 py-2 rounded-lg font-bold text-xs tracking-wide transition-all ${
+                            realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                        }`}
+                    >
+                        {realTimeMode ? 'DISABLE' : 'ENABLE'}
+                    </button>
+                </div>
+            </div>
+
             <SpaceWeatherPanel
               spaceWeather={spaceWeather}
               onRefresh={fetchSpaceWeather}
@@ -477,14 +604,9 @@ function App() {
 
             <ControlPanel
               routeMode={currentRouteMode}
-              onRouteModeChange={(mode) => {
-                setCurrentRouteMode(mode)
-                if (startPoint && endPoint) {
-                  calculateRoute(startPoint, endPoint, mode)
-                }
-              }}
+              onRouteModeChange={toggleSystemMode}
               gpsActive={gpsActive}
-              onGPSFailureToggle={toggleGPSFailure}
+              onGPSFailureToggle={handleGPSFailureToggle}
               vehicleMoving={vehicleMoving}
               onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
               onReset={resetSimulation}
@@ -498,11 +620,7 @@ function App() {
 
           <div className="lg:col-span-2">
             <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
-              {/* Map Mask when Selecting */}
-              {activePointType === 'selecting' && (
-                <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />
-              )}
-              
+              {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
               <MapComponent
                 center={mapCenter}
                 zoom={12}
@@ -526,20 +644,10 @@ function App() {
                   <div className={`px-3 py-1 rounded-full text-sm font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {gpsActive ? 'GPS: Active' : 'GPS: Failed (IMU Active)'}
                   </div>
-                  <div className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                    {currentRouteMode === 'normal' ? 'Normal Route' : 'Storm-Safe Route'}
-                  </div>
-                  {simulationMode && (
-                    <div className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
-                      Simulation Active
-                    </div>
-                  )}
+                  {realTimeMode && <div className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">Live Sensors</div>}
                 </div>
-
                 <div className="text-sm text-gray-600">
-                  {vehiclePosition && (
-                    <span>Vehicle: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>
-                  )}
+                  {vehiclePosition && <span>Vehicle: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
                 </div>
               </div>
             </div>
@@ -548,12 +656,7 @@ function App() {
               <RouteComparison
                 routes={routes}
                 currentMode={currentRouteMode}
-                onSelectRoute={(mode) => {
-                  setCurrentRouteMode(mode)
-                  if (startPoint && endPoint) {
-                    calculateRoute(startPoint, endPoint, mode)
-                  }
-                }}
+                onSelectRoute={toggleSystemMode}
               />
             </div>
           </div>
@@ -563,30 +666,14 @@ function App() {
       <footer className="mt-8 border-t bg-white py-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="text-gray-600">
-              <p className="font-medium">StellarRoute - Hackathon Project</p>
-              <p className="text-sm">Space-weather aware navigation with GPS failure resilience</p>
-            </div>
-
+            <div className="text-gray-600"><p className="font-medium">StellarRoute - Hackathon Project</p></div>
             <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-500">
-                Backend: {import.meta.env.VITE_API_URL || 'http://localhost:8000'}
-              </div>
-              <button
-                onClick={() => window.open('http://localhost:8000/docs', '_blank')}
-                className="text-sm text-primary hover:text-primary/80"
-              >
-                API Documentation
-              </button>
+              <button onClick={() => window.open('http://localhost:8000/docs', '_blank')} className="text-sm text-primary hover:text-primary/80">API Documentation</button>
             </div>
-          </div>
-          <div className="text-xs text-center text-gray-400 mt-4">
-            Note: Login status is controlled by the HttpOnly session cookie set by FastAPI.
           </div>
         </div>
       </footer>
 
-      {/* Loading Spinner */}
       {loading && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-2xl">
@@ -598,13 +685,7 @@ function App() {
         </div>
       )}
 
-      {/* Login Modal Render */}
-      {showLoginModal && (
-        <LoginModal
-          onClose={() => setShowLoginModal(false)}
-          onSuccess={handleLoginSuccess}
-        />
-      )}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={handleLoginSuccess} />}
     </div>
   )
 }
