@@ -137,3 +137,25 @@
 .text-risk-high {
   color: #F44336;
 }
+
+
+
+/* Add these at the end of your CSS file */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse {
+  animation: pulse 1s infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 2s linear infinite;
+}

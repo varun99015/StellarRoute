@@ -58,6 +58,8 @@ function App() {
   const [vehiclePosition, setVehiclePosition] = useState(null)
   const [useIMUNavigation, setUseIMUNavigation] = useState(false)
   
+  const [chaosMode, setChaosMode] = useState(false)
+
   // --- REFS ---
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
@@ -459,8 +461,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      
+      <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden' : ''}`}>
+      {chaosMode && (
+        <div className="fixed inset-0 pointer-events-none z-50">
+          <div className="absolute inset-0 bg-red-500/5 animate-pulse"></div>
+          <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-pulse"></div>
+        </div>
+      )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
@@ -564,6 +571,22 @@ function App() {
                         {realTimeMode ? 'DISABLE' : 'ENABLE'}
                     </button>
                 </div>
+            </div>
+
+            {/* Chaos Mode Toggle */}
+            <div className={`glass-card p-4 rounded-xl border-2 ${chaosMode ? 'border-red-500 bg-red-50 animate-pulse' : 'border-gray-300'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className={`w-6 h-6 ${chaosMode ? 'text-red-500 animate-spin' : 'text-gray-400'}`} />
+                  <span className="font-bold">CHAOS MODE</span>
+                </div>
+                <button 
+                  onClick={() => setChaosMode(!chaosMode)}
+                  className={`px-4 py-2 rounded-lg font-bold ${chaosMode ? 'bg-red-600 text-white' : 'bg-gray-200'}`}
+                >
+                  {chaosMode ? 'DISABLE' : 'ENABLE'}
+                </button>
+              </div>
             </div>
 
             {/* 2. SOLAR STORM 3D GLOBE (REPLACES 2D PANEL) */}
