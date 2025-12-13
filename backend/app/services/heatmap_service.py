@@ -1,9 +1,11 @@
-import geojson
-from typing import List, Tuple, Dict, Any
-import numpy as np
-from ..models import RiskLevel, HeatmapRequest
-from .risk_service import RiskAssessmentService
 import logging
+from typing import Any, Dict, List, Tuple
+
+import geojson
+import numpy as np
+
+from ..models import HeatmapRequest, RiskLevel
+from .risk_service import RiskAssessmentService
 
 logger = logging.getLogger(__name__)
 

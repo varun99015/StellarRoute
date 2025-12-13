@@ -1,7 +1,8 @@
-import uvicorn
 import logging
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import uvicorn
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent

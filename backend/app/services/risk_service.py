@@ -1,13 +1,12 @@
 from datetime import datetime
-from app.models.risk_model import RiskAssessment
+
 from app.core.config import settings
+from app.models.risk_model import RiskAssessment
 
 
 class RiskService:
     @staticmethod
-    def calculate_risk_score(
-        kp_index: float, lat: float, lon: float
-    ) -> RiskAssessment:
+    def calculate_risk_score(kp_index: float, lat: float, lon: float) -> RiskAssessment:
         # Base risk from Kp index (0-9 scale to 0-100)
         base_risk = (kp_index / 9.0) * 100
 
