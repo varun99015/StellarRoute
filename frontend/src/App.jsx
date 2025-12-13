@@ -45,7 +45,6 @@ function App() {
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
   const imuNavigatorRef = useRef(null)
-  const animationFrameRef = useRef(null)
   const lastPositionRef = useRef(null) 
 
   useEffect(() => {
@@ -90,9 +89,7 @@ function App() {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
 
-    return () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
-    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // --- API CALLS ---
