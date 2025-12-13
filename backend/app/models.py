@@ -1,7 +1,9 @@
-from pydantic import BaseModel
-from typing import List, Tuple, Optional, Dict, Any
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+from pydantic import BaseModel
+
 
 
 class RiskLevel(str, Enum):

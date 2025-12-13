@@ -22,18 +22,21 @@ export class GPSSimulator {
     // Base drift based on risk level
     let baseDrift
     switch(riskLevel) {
-      case 'low': baseDrift = 0.00005 // ~5.5m per step
-      case 'medium': baseDrift = 0.0002 // ~22m per step
-      case 'high': baseDrift = 0.0005 // ~55m per step
+      case 'low': baseDrift = 0.00005; // ~5.5m per step
+      break;
+      case 'medium': baseDrift = 0.0002; // ~22m per step
+      break;
+      case 'high': baseDrift = 0.0005; // ~55m per step
+      break;
       default: baseDrift = 0.0001
     }
     
     // Adjust based on storm severity
     switch(severity) {
-      case 'low': return baseDrift * 0.5
-      case 'medium': return baseDrift
-      case 'high': return baseDrift * 2.0
-      default: return baseDrift
+      case 'low': return baseDrift * 0.5;
+      case 'medium': return baseDrift;
+      case 'high': return baseDrift * 2.0;
+      default: return baseDrift;
     }
   }
   

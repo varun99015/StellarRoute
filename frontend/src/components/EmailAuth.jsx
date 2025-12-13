@@ -34,7 +34,7 @@ function EmailAuth() {
         e.preventDefault();
         setMessage('');
         try {
-            const response = await axios.post('http://localhost:5000/api/auth/verify-otp', { email, otp });
+            await axios.post('http://localhost:5000/api/auth/verify-otp', { email, otp });
             
             // On successful verification, the backend sets the session cookie.
             // Redirect the user to the dashboard or protected area.
