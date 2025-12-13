@@ -4,6 +4,7 @@ import MapComponent from './components/MapComponent'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import ControlPanel from './components/ControlPanel'
 import RouteComparison from './components/RouteComparison'
+import SolarStormGlobe from './components/SolarStormGlobe' // <--- NEW IMPORT
 import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
@@ -12,21 +13,20 @@ import LoginModal from './components/LoginModal';
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue } from "firebase/database";
-import { firebaseConfig } from './firebaseConfig'; // Importing credentials
+import { firebaseConfig } from './firebaseConfig'; 
 
 // Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
 function App() {
-  // --- AUTHENTICATION STATE (FIXED: Loads from Session) ---
+  // --- AUTHENTICATION STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    // Check storage immediately on load
-    return sessionStorage.getItem('stellar_isLoggedIn') === 'true';
+    return localStorage.getItem('stellar_isLoggedIn') === 'true';
   });
   
   const [userName, setUserName] = useState(() => {
-    return sessionStorage.getItem('stellar_userName');
+    return localStorage.getItem('stellar_userName');
   });
 
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -64,37 +64,26 @@ function App() {
   const imuNavigatorRef = useRef(null)
   const lastPositionRef = useRef(null) 
 
-  // --- SESSION PERSISTENCE EFFECT ---
-  // This saves the login state whenever it changes
+  // --- PERSISTENCE EFFECT ---
   useEffect(() => {
-    sessionStorage.setItem('stellar_isLoggedIn', isLoggedIn);
+    localStorage.setItem('stellar_isLoggedIn', isLoggedIn);
     if (userName) {
-      sessionStorage.setItem('stellar_userName', userName);
+      localStorage.setItem('stellar_userName', userName);
     } else {
-      sessionStorage.removeItem('stellar_userName');
+      localStorage.removeItem('stellar_userName');
     }
   }, [isLoggedIn, userName]);
 
   // --- MATH HELPER FOR REAL-TIME ---
   const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
-      // Earth Radius (m)
       const R = 6371e3;
-      
-      // Time delta (seconds)
       const now = sensorData.timestamp;
-      // If first packet or reset, assume small delta
       const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
       
-      // Ignore large gaps/lag (prevents jumps)
       if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
 
-      // Speed (km/h -> m/s)
       const speed = (sensorData.speed || 0) / 3.6;
-      
-      // Distance moved
       const d = speed * dt;
-      
-      // Bearing (Degrees -> Radians)
       const brng = (sensorData.heading || 0) * Math.PI / 180;
       
       const lat1 = currentLat * Math.PI / 180;
@@ -113,24 +102,16 @@ function App() {
       };
   }
 
-  // --- FIREBASE LISTENER WITH DEBUG LOGS ---
+  // --- FIREBASE LISTENER ---
   useEffect(() => {
     if (realTimeMode) {
-        console.log("%c📡 CONNECTED TO FIREBASE - LISTENING FOR SENSORS...", "color: green; font-weight: bold; font-size: 14px;");
-        
+        console.log("📡 Subscribing to Firebase vehicle_control...");
         const sensorRef = ref(db, 'vehicle_control');
         
         const unsubscribe = onValue(sensorRef, (snapshot) => {
             const data = snapshot.val();
             
             if (data && lastPositionRef.current) {
-                // LOG 1: RAW INCOMING DATA
-                console.groupCollapsed(`[Sensor Packet] ${new Date().toLocaleTimeString()}`);
-                console.log(`📱 Raw Phone Data:`, data);
-                console.log(`🚀 Speed: ${data.speed} km/h`);
-                console.log(`🧭 Heading: ${data.heading}°`);
-                
-                // Calculate Dead Reckoning
                 const newPos = calculateNewPosition(
                     lastPositionRef.current[0],
                     lastPositionRef.current[1],
@@ -138,18 +119,10 @@ function App() {
                     lastSensorTime
                 );
                 
-                // LOG 2: MATH & RESULT
-                console.log(`📍 Previous Position: ${lastPositionRef.current[0].toFixed(6)}, ${lastPositionRef.current[1].toFixed(6)}`);
-                console.log(`➕ Computed Offset: Moving ${(data.speed/3.6).toFixed(2)} m/s for ${((data.timestamp - lastSensorTime)/1000).toFixed(3)}s`);
-                console.log(`🎯 NEW Position: ${newPos.lat.toFixed(6)}, ${newPos.lon.toFixed(6)}`);
-                console.groupEnd();
-
-                // Update React State & Refs
                 setLastSensorTime(newPos.timestamp);
                 setVehiclePosition([newPos.lat, newPos.lon]);
                 lastPositionRef.current = [newPos.lat, newPos.lon];
                 
-                // Leave a trail
                 setDriftPath(prev => {
                     const newPath = [...prev, [newPos.lat, newPos.lon]];
                     if (newPath.length > 500) return newPath.slice(newPath.length - 500);
@@ -158,10 +131,7 @@ function App() {
             }
         });
         
-        return () => {
-            console.log("%c🔌 DISCONNECTED FROM LIVE SENSORS", "color: red; font-weight: bold;");
-            unsubscribe();
-        };
+        return () => unsubscribe();
     }
   }, [realTimeMode, lastSensorTime]);
 
@@ -180,7 +150,7 @@ function App() {
     } finally {
       setIsLoggedIn(false);
       setUserName(null);
-      sessionStorage.clear(); // Clear storage on logout
+      localStorage.clear(); 
     }
   };
 
@@ -193,8 +163,6 @@ function App() {
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // --- API CALLS ---
@@ -203,7 +171,18 @@ function App() {
       setLoading(true)
       const response = await stellarRouteAPI.getCurrentSpaceWeather(mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
-      if (mapBounds) fetchHeatmap(mapBounds)
+      
+      let boundsToUse = mapBounds;
+      if (!boundsToUse) {
+          const lat = mapCenter[0];
+          const lon = mapCenter[1];
+          boundsToUse = {
+              _northEast: { lat: lat + 0.1, lng: lon + 0.1 },
+              _southWest: { lat: lat - 0.1, lng: lon - 0.1 }
+          };
+      }
+      fetchHeatmap(boundsToUse);
+      
     } catch (error) {
       console.error('Error fetching space weather:', error)
     } finally {
@@ -213,10 +192,37 @@ function App() {
 
   const fetchHeatmap = async (bounds) => {
     try {
-      const response = await stellarRouteAPI.getHeatmap(bounds, 0.02)
-      setHeatmapData(response.data)
+      if (!bounds) return;
+
+      let north, south, east, west;
+
+      if (bounds._northEast && bounds._southWest) {
+          north = bounds._northEast.lat;
+          south = bounds._southWest.lat;
+          east = bounds._northEast.lng;
+          west = bounds._southWest.lng;
+      } 
+      else if (typeof bounds.getNorth === 'function') {
+          north = bounds.getNorth();
+          south = bounds.getSouth();
+          east = bounds.getEast();
+          west = bounds.getWest();
+      }
+
+      if (isNaN(north)) return;
+
+      const bboxList = [
+          parseFloat(west), 
+          parseFloat(south),
+          parseFloat(east), 
+          parseFloat(north)
+      ];
+      
+      const response = await stellarRouteAPI.getHeatmap(bboxList);
+      setHeatmapData(response.data);
+
     } catch (error) {
-      console.error('Error fetching heatmap:', error)
+      console.error('Heatmap Error:', error);
     }
   }
 
@@ -344,7 +350,6 @@ function App() {
     lastPositionRef.current = currentPos;
 
     if (!shouldGPSBeActive) {
-      // Safe Mode (IMU)
       const targetPath = imuPath.length > 0 ? imuPath : (routes.safe?.path || routes.normal?.path || []);
       if (targetPath.length > 0) {
           const closestIndex = findClosestPathIndex(currentPos, targetPath);
@@ -353,19 +358,15 @@ function App() {
       }
       setUseIMUNavigation(true);
     } else {
-      // Normal Mode (GPS)
       let targetPath = routes.normal?.path || [];
-      
       if (simulationMode && routes.drifted?.path && routes.drifted.path.length > 0) {
           targetPath = routes.drifted.path;
       }
-
       if (targetPath.length > 0) {
           const closestIndex = findClosestPathIndex(currentPos, targetPath);
           const remainingPath = targetPath.slice(closestIndex);
           vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
       }
-
       if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS();
       setUseIMUNavigation(false);
       setDriftPath([]); 
@@ -377,13 +378,10 @@ function App() {
       toggleSystemMode(newMode);
   };
 
-  // Toggle for Real-Time Phone Sensor Mode
   const toggleRealTimeMode = () => {
       const newState = !realTimeMode;
       setRealTimeMode(newState);
-      
       if (newState) {
-          // Entering Real-Time Mode: Stop internal simulators
           setVehicleMoving(false); 
           setGPSActive(false);     
           setUseIMUNavigation(true); 
@@ -391,7 +389,6 @@ function App() {
           setLastSensorTime(0);    
           alert("Real-Time Mode Active! Move your phone to navigate.");
       } else {
-          // Exiting: Restore basic state
           setGPSActive(true);
           setUseIMUNavigation(false);
       }
@@ -401,29 +398,19 @@ function App() {
   useEffect(() => {
     let animationId
     const animate = () => {
-      // **CRITICAL**: Only run the internal animation if we are NOT in Real-Time Mode
       if (vehicleMoving && !realTimeMode) {
         let displayPosition;
-
         if (gpsActive) {
-             if (vehicleAnimatorRef.current) {
-                 displayPosition = vehicleAnimatorRef.current.update();
-             }
+             if (vehicleAnimatorRef.current) displayPosition = vehicleAnimatorRef.current.update();
         } else {
-             if (imuNavigatorRef.current) {
-                 displayPosition = imuNavigatorRef.current.update();
-             }
+             if (imuNavigatorRef.current) displayPosition = imuNavigatorRef.current.update();
         }
         
         if (displayPosition) {
             setVehiclePosition(displayPosition);
-            
             const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
-            if (currentAnimator && !currentAnimator.isMoving) {
-                 setVehicleMoving(false);
-            }
+            if (currentAnimator && !currentAnimator.isMoving) setVehicleMoving(false);
         }
-        
         animationId = requestAnimationFrame(animate);
       }
     }
@@ -437,13 +424,12 @@ function App() {
       imuNavigatorRef.current?.pause()
       if (animationId) cancelAnimationFrame(animationId)
     }
-
     return () => { if (animationId) cancelAnimationFrame(animationId) }
   }, [vehicleMoving, gpsActive, useIMUNavigation, realTimeMode])
 
   const resetSimulation = () => {
     setVehicleMoving(false)
-    setRealTimeMode(false) // Turn off live mode on reset
+    setRealTimeMode(false) 
     setGPSActive(true)
     setUseIMUNavigation(false)
     setDriftPath([])
@@ -453,7 +439,6 @@ function App() {
     lastPositionRef.current = startPoint
     
     if (gpsSimulatorRef.current) gpsSimulatorRef.current.reset()
-    
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
       const route = routes.normal?.path || [startPoint, endPoint]
@@ -475,6 +460,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
@@ -507,26 +493,17 @@ function App() {
               {isLoggedIn ? (
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">Hi, {userName || 'User'}</span>
-                  <button
-                    onClick={handleLogout}
-                    className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition-colors"
-                  >
+                  <button onClick={handleLogout} className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm transition-colors">
                     Logout
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => setShowLoginModal(true)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                >
+                <button onClick={() => setShowLoginModal(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
                   Login
                 </button>
               )}
 
-              <button
-                onClick={resetSimulation}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
-              >
+              <button onClick={resetSimulation} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">
                 Reset Demo
               </button>
             </div>
@@ -573,8 +550,8 @@ function App() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
             
-            {/* LIVE SENSOR TOGGLE */}
-            <div className="glass-card p-4 rounded-xl border-2 border-purple-500 shadow-sm">
+            {/* 1. LIVE SENSOR TOGGLE */}
+            <div className="glass-card p-4 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
@@ -583,23 +560,25 @@ function App() {
                             <span className="text-[10px] text-gray-500">Firebase: {realTimeMode ? 'Listening' : 'Idle'}</span>
                         </div>
                     </div>
-                    <button 
-                        onClick={toggleRealTimeMode}
-                        className={`px-4 py-2 rounded-lg font-bold text-xs tracking-wide transition-all ${
-                            realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                        }`}
-                    >
+                    <button onClick={toggleRealTimeMode} className={`px-4 py-2 rounded-lg font-bold text-xs tracking-wide transition-all ${ realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md' : 'bg-gray-200 text-gray-600 hover:bg-gray-300' }`}>
                         {realTimeMode ? 'DISABLE' : 'ENABLE'}
                     </button>
                 </div>
             </div>
 
+            {/* 2. SOLAR STORM 3D GLOBE (REPLACES 2D PANEL) */}
+           <div className="h-[500px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
+    <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} />
+</div>
+
+            {/* 3. SIMULATION CONTROLS */}
             <SpaceWeatherPanel
               spaceWeather={spaceWeather}
               onRefresh={fetchSpaceWeather}
               onSimulate={simulateStorm}
               simulationMode={simulationMode}
               loading={loading}
+              hideChart={true} // Optional: If you want to hide the old chart since you have the globe now
             />
 
             <ControlPanel
