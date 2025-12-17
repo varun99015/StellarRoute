@@ -29,6 +29,7 @@ Thumbs.db
 .env.test.local
 .env.production.local
 node_modules/
-
+mobilesensors/*
 MobileRemote/*
 LaptopTesting/*
+LaptopTesting/
