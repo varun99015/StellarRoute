@@ -23,14 +23,9 @@ const db = getDatabase(firebaseApp);
 
 function App() {
   // --- AUTHENTICATION STATE ---
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('stellar_isLoggedIn') === 'true';
-  });
-  
-  const [userName, setUserName] = useState(() => {
-    return localStorage.getItem('stellar_userName');
-  });
-
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true); // Prevents UI flicker while checking
   const [showLoginModal, setShowLoginModal] = useState(false);
   
   // --- REAL-TIME SENSOR STATE ---
@@ -72,14 +67,36 @@ function App() {
   const lastPositionRef = useRef(null) 
 
   // --- PERSISTENCE EFFECT ---
-  useEffect(() => {
-    localStorage.setItem('stellar_isLoggedIn', isLoggedIn);
-    if (userName) {
-      localStorage.setItem('stellar_userName', userName);
-    } else {
-      localStorage.removeItem('stellar_userName');
-    }
-  }, [isLoggedIn, userName]);
+useEffect(() => {
+    const verifySession = async () => {
+      try {
+        // This hits /api/auth/status which securely validates the HttpOnly JWT cookie
+        const response = await stellarRouteAPI.checkAuthStatus();
+        
+        if (response.data.status === 'authenticated') {
+          setIsLoggedIn(true);
+          // Set username from the JWT payload (e.g., extracting the name from the email)
+          const emailName = response.data.user_email.split('@')[0];
+          setUserName(emailName);
+          
+          // Sync safe display data to localStorage
+          localStorage.setItem('stellar_isLoggedIn', 'true');
+          localStorage.setItem('stellar_userName', emailName);
+        }
+      } catch (error) {
+        // If the backend says the token is invalid/expired (401), force logout
+        console.log("Session invalid or expired");
+        setIsLoggedIn(false);
+        setUserName(null);
+        localStorage.removeItem('stellar_isLoggedIn');
+        localStorage.removeItem('stellar_userName');
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+
+    verifySession();
+  }, []);
 
   // --- MATH HELPER FOR REAL-TIME ---
   const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
@@ -532,6 +549,17 @@ useEffect(() => {
   }
 }, [chaosMode, chaosAudio]);
 
+if (authChecking) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span className="font-medium text-gray-600">Verifying secure session...</span>
+        </div>
+      </div>
+    );
+  }
+  
   return (
   <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
     
