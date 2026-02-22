@@ -28,3 +28,9 @@ dist-ssr
 *.sln
 *.sw?
 __pycache__
+
+algorithms/
+algorithms/*
+backend/algorithms
+LaptopTesting/*
+LaptopTesting/
