@@ -131,13 +131,13 @@ def generate_otp(length: int = 6) -> str:
     return "".join([str(random.randint(0, 9)) for _ in range(length)])
 
 
-def send_email_otp(email: EmailStr, otp: str):
+def send_email_otp(email: EmailStr, otp: str) -> bool:
     """Sends an OTP via SMTP with auto-fallback between SSL and STARTTLS."""
 
     if not all([SMTP_SERVER, EMAIL_ADDRESS, EMAIL_PASSWORD]):
         logger.error("Email configuration missing. Cannot send email.")
-        logger.info(f"DEV FALLBACK: OTP for {email} is {otp}")
-        return True
+        # FIX: Removed the dev fallback. Fail securely.
+        return False
 
     email_body = f"""
 Dear User,
@@ -158,7 +158,6 @@ The StellarRoute Team
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = email
 
-    # Try SSL (Port 465) first, then fallback to STARTTLS (Port 587)
     try:
         # Attempt 1: SSL (Common for Gmail)
         context = smtplib.ssl.create_default_context()
@@ -181,9 +180,31 @@ The StellarRoute Team
             return True
         except Exception as e_tls:
             logger.error(f"Failed to send email via both methods: {e_tls}")
-            # Log the OTP to console as a failsafe
-            logger.info(f"FAILSAFE: OTP for {email} is {otp}")
-            return True
+            # FIX: Removed the insecure logger.info failsafe
+            return False
+
+
+@app.post(
+    "/api/auth/request-otp",
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Authentication"],
+)
+async def request_otp(request: EmailRequest):
+    """Generates an OTP and sends it to the user's actual email."""
+    otp_code = generate_otp()
+
+    # FIX: Check if the email actually sent
+    email_sent = send_email_otp(request.email, otp_code)
+
+    if not email_sent:
+        # If email fails, do NOT store the OTP and alert the frontend
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send verification email. Please try again later.",
+        )
+
+    OTP_STORE[request.email] = {"otp": otp_code, "expiry": time.time() + 300}
+    return {"message": "OTP sent successfully."}
 
 
 def create_session_jwt(email: str) -> str:
