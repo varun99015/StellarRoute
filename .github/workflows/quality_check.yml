@@ -2,60 +2,62 @@ name: Code Quality Checks
 
 on:
   push:
-    branches: [ "main"]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main"]
+    branches: [ "main" ]
 
 jobs:
-  # JOB 1: CHECK FRONTEND
   frontend-checks:
     runs-on: ubuntu-latest
-    defaults:
-      run:
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify package-lock.json existence
+        # This will fail the job immediately if the file is missing in the runner
+        run: |
+          if [ ! -f "frontend/package-lock.json" ]; then
+            echo "ERROR: package-lock.json not found in frontend directory"
+            ls -R frontend
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        # Running npm ci strictly inside the frontend folder
+        run: npm ci
         working-directory: ./frontend
 
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Run Linter
+        run: npm run lint
+        working-directory: ./frontend
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: frontend/package-lock.json
-
-    - name: Install Dependencies
-      run: npm ci
-
-    - name: Run Linter
-      run: npm run lint
-
-  # JOB 2: CHECK BACKEND
   backend-checks:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black
+          if [ -f backend/requirements.txt ]; then pip install -r backend/requirements.txt; fi
 
-    - name: Run Formatter Check (Black)
-      run: black --check .
+      - name: Run Formatter Check (Black)
+        run: black --check backend
 
-    - name: Run Linter (Flake8)
-      run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+      - name: Run Linter (Flake8)
+        run: flake8 backend --count --select=E9,F63,F7,F82 --show-source --statistics
