@@ -195,16 +195,17 @@ async def request_otp(request: EmailRequest):
 
     # FIX: Check if the email actually sent
     email_sent = send_email_otp(request.email, otp_code)
-    
+
     if not email_sent:
         # If email fails, do NOT store the OTP and alert the frontend
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to send verification email. Please try again later."
+            detail="Failed to send verification email. Please try again later.",
         )
 
     OTP_STORE[request.email] = {"otp": otp_code, "expiry": time.time() + 300}
     return {"message": "OTP sent successfully."}
+
 
 def create_session_jwt(email: str) -> str:
     """Creates a JWT for session tracking."""
