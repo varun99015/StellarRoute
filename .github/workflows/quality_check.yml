@@ -29,7 +29,7 @@ jobs:
       run: npm install
 
     - name: Run Linter
-      run: npm run lint
+      run: npx eslint .
 
   # JOB 2: CHECK BACKEND
   backend-checks:
