@@ -2,9 +2,9 @@ name: Code Quality Checks
 
 on:
   push:
-    branches: [ "main", "master", "brownie2" ]
+    branches: [ "main"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main"]
 
 jobs:
   # JOB 1: CHECK FRONTEND
