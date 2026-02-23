@@ -343,7 +343,6 @@ async def get_current_space_weather(
             weather_data, latitude, scenario
         )
 
-        await broadcast_update("space_weather_update", processed_data.dict())
         return processed_data
 
     except Exception as e:

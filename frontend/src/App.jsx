@@ -287,6 +287,75 @@ useEffect(() => {
       setLoading(false)
     }
   }
+  // 1. THE REST POLLING LOOP (Quiet background updates)
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchWeather = async () => {
+      try {
+        // Fetch background weather (using default coords or your start/end points)
+        const res = await stellarRouteAPI.getCurrentSpaceWeather(37.7749, -122.4194);
+        if (isMounted) {
+          setSpaceWeather(res.data);
+          // If the API returns a simulation source, sync our local state
+          if (res.data.source !== 'NOAA' && res.data.source !== 'FALLBACK') {
+            setSimulationMode(true);
+          } else {
+            setSimulationMode(false);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch space weather:", error);
+      }
+    };
+
+    // Fetch immediately on mount
+    fetchWeather();
+
+    // Set up the polling interval (every 30 seconds)
+    const intervalId = setInterval(fetchWeather, 30000);
+
+    // Cleanup function to prevent memory leaks when navigating away
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []); // Empty dependency array means this runs once on mount
+
+
+  // 2. THE WEBSOCKET LISTENER (Instant trigger for "Simulate Storm")
+  useEffect(() => {
+    // Get the WS URL dynamically based on your Vite environment
+    const wsUrl = (import.meta.env.VITE_API_URL || 'http://localhost:8000')
+      .replace('http', 'ws') + '/ws/updates';
+      
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      // When ANY user clicks "Simulate Storm", this updates everyone's dashboard instantly
+      if (message.type === 'simulation_started') {
+        console.log("Storm Simulation triggered by another user!");
+        setSimulationMode(true);
+        // message.data.data contains the SpaceWeatherData from backend
+        if (message.data && message.data.data) {
+          setSpaceWeather(message.data.data); 
+        }
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket Error:", error);
+    };
+
+    // Cleanup: close the connection when unmounting
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+  }, []);
   
   const calculateIMUPath = async (start, end) => {
     try {
