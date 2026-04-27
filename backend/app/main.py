@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 import logging
-import os
+# import os
 import random
 import smtplib
 import time
@@ -11,7 +11,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List
 
 import redis.asyncio as redis
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
     HTTPException,
@@ -24,6 +24,9 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
+
+# import centralized settings
+from .config import settings
 
 from .cache.memory_cache import cache
 
@@ -45,19 +48,33 @@ from .services.simulation import StormSimulator
 
 # --- CONFIGURATION ---
 
-load_dotenv()
+# load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed")
-ALGORITHM = "HS256"
-SESSION_EXPIRY_SECONDS = 30 * 60  # 30 minutes
+# SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed")
+# ALGORITHM = "HS256"
+# SESSION_EXPIRY_SECONDS = 30 * 60  # 30 minutes
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+# redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+# SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+# SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+# EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+# EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+# Now use settings
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+SESSION_EXPIRY_SECONDS = settings.SESSION_EXPIRY_SECONDS
+REDIS_URL = settings.REDIS_URL
+
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+# Email config from settings
+SMTP_SERVER = settings.SMTP_SERVER
+SMTP_PORT = settings.SMTP_PORT
+EMAIL_ADDRESS = settings.EMAIL_ADDRESS
+EMAIL_PASSWORD = settings.EMAIL_PASSWORD
 
 active_connections: List[WebSocket] = []
 
@@ -72,16 +89,25 @@ app = FastAPI(
     version="2.0.0",
 )
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# code before refactor
+
+# origins = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     "http://localhost:5173",
+#     "http://127.0.0.1:5173",
+# ]
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=origins,
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,   # was hardcoded list
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
