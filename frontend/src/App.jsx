@@ -15,7 +15,7 @@ import { audioManager } from './utils/audioManager';
 // --- FIREBASE IMPORTS ---
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue } from "firebase/database";
-import { firebaseConfig } from './firebaseConfig'; 
+import { firebaseConfig } from './firebaseConfig';
 
 // Initialize Firebase
 const firebaseApp = initializeApp(firebaseConfig);
@@ -29,7 +29,7 @@ function App() {
   const [userName, setUserName] = useState(null);
   const [authChecking, setAuthChecking] = useState(true); // Prevents UI flicker while checking
   const [showLoginModal, setShowLoginModal] = useState(false);
-  
+
   // --- REAL-TIME SENSOR STATE ---
   const [realTimeMode, setRealTimeMode] = useState(false);
   const [lastSensorTime, setLastSensorTime] = useState(0);
@@ -56,7 +56,7 @@ function App() {
   const [vehicleMoving, setVehicleMoving] = useState(false)
   const [vehiclePosition, setVehiclePosition] = useState(null)
   const [useIMUNavigation, setUseIMUNavigation] = useState(false)
-  
+
   const [chaosMode, setChaosMode] = useState(false)
   const [chaosIntensity, setChaosIntensity] = useState(3)
   const [chaosAudio, setChaosAudio] = useState(true)
@@ -66,21 +66,21 @@ function App() {
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
   const imuNavigatorRef = useRef(null)
-  const lastPositionRef = useRef(null) 
+  const lastPositionRef = useRef(null)
 
   // --- PERSISTENCE EFFECT ---
-useEffect(() => {
+  useEffect(() => {
     const verifySession = async () => {
       try {
         // This hits /api/auth/status which securely validates the HttpOnly JWT cookie
         const response = await stellarRouteAPI.checkAuthStatus();
-        
+
         if (response.data.status === 'authenticated') {
           setIsLoggedIn(true);
           // Set username from the JWT payload (e.g., extracting the name from the email)
           const emailName = response.data.user_email.split('@')[0];
           setUserName(emailName);
-          
+
           // Sync safe display data to localStorage
           localStorage.setItem('stellar_isLoggedIn', 'true');
           localStorage.setItem('stellar_userName', emailName);
@@ -102,70 +102,70 @@ useEffect(() => {
 
   // --- MATH HELPER FOR REAL-TIME ---
   const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
-      const R = 6371e3;
-      const now = sensorData.timestamp;
-      const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
-      
-      if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
+    const R = 6371e3;
+    const now = sensorData.timestamp;
+    const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
 
-      const speed = (sensorData.speed || 0) / 3.6;
-      const d = speed * dt;
-      const brng = (sensorData.heading || 0) * Math.PI / 180;
-      
-      const lat1 = currentLat * Math.PI / 180;
-      const lon1 = currentLon * Math.PI / 180;
+    if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
 
-      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d/R) +
-                  Math.cos(lat1) * Math.sin(d/R) * Math.cos(brng));
-      
-      const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d/R) * Math.cos(lat1),
-                           Math.cos(d/R) - Math.sin(lat1) * Math.sin(lat2));
+    const speed = (sensorData.speed || 0) / 3.6;
+    const d = speed * dt;
+    const brng = (sensorData.heading || 0) * Math.PI / 180;
 
-      return {
-          lat: lat2 * 180 / Math.PI,
-          lon: lon2 * 180 / Math.PI,
-          timestamp: now
-      };
+    const lat1 = currentLat * Math.PI / 180;
+    const lon1 = currentLon * Math.PI / 180;
+
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d / R) +
+      Math.cos(lat1) * Math.sin(d / R) * Math.cos(brng));
+
+    const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d / R) * Math.cos(lat1),
+      Math.cos(d / R) - Math.sin(lat1) * Math.sin(lat2));
+
+    return {
+      lat: lat2 * 180 / Math.PI,
+      lon: lon2 * 180 / Math.PI,
+      timestamp: now
+    };
   }
 
   // --- FIREBASE LISTENER ---
   useEffect(() => {
     if (realTimeMode) {
-        console.log("📡 Subscribing to Firebase vehicle_control...");
-        const sensorRef = ref(db, 'vehicle_control');
-        
-        const unsubscribe = onValue(sensorRef, (snapshot) => {
-            const data = snapshot.val();
-            
-            if (data && lastPositionRef.current) {
-                const newPos = calculateNewPosition(
-                    lastPositionRef.current[0],
-                    lastPositionRef.current[1],
-                    data,
-                    lastSensorTime
-                );
-                
-                setLastSensorTime(newPos.timestamp);
-                setVehiclePosition([newPos.lat, newPos.lon]);
-                lastPositionRef.current = [newPos.lat, newPos.lon];
-                
-                setDriftPath(prev => {
-                    const newPath = [...prev, [newPos.lat, newPos.lon]];
-                    if (newPath.length > 500) return newPath.slice(newPath.length - 500);
-                    return newPath;
-                });
-            }
-        });
-        
-        return () => unsubscribe();
+      console.log("📡 Subscribing to Firebase vehicle_control...");
+      const sensorRef = ref(db, 'vehicle_control');
+
+      const unsubscribe = onValue(sensorRef, (snapshot) => {
+        const data = snapshot.val();
+
+        if (data && lastPositionRef.current) {
+          const newPos = calculateNewPosition(
+            lastPositionRef.current[0],
+            lastPositionRef.current[1],
+            data,
+            lastSensorTime
+          );
+
+          setLastSensorTime(newPos.timestamp);
+          setVehiclePosition([newPos.lat, newPos.lon]);
+          lastPositionRef.current = [newPos.lat, newPos.lon];
+
+          setDriftPath(prev => {
+            const newPath = [...prev, [newPos.lat, newPos.lon]];
+            if (newPath.length > 500) return newPath.slice(newPath.length - 500);
+            return newPath;
+          });
+        }
+      });
+
+      return () => unsubscribe();
     }
   }, [realTimeMode, lastSensorTime]);
 
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
     setIsLoggedIn(true);
-    setUserName(userDisplayName); 
-    setShowLoginModal(false); 
+    setUserName(userDisplayName);
+    setShowLoginModal(false);
   };
 
   const handleLogout = async () => {
@@ -176,7 +176,7 @@ useEffect(() => {
     } finally {
       setIsLoggedIn(false);
       setUserName(null);
-      localStorage.clear(); 
+      localStorage.clear();
     }
   };
 
@@ -185,7 +185,7 @@ useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
     imuNavigatorRef.current = new VehicleAnimator([startPoint])
-    
+
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
@@ -197,18 +197,18 @@ useEffect(() => {
       setLoading(true)
       const response = await stellarRouteAPI.getCurrentSpaceWeather(mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
-      
+
       let boundsToUse = mapBounds;
       if (!boundsToUse) {
-          const lat = mapCenter[0];
-          const lon = mapCenter[1];
-          boundsToUse = {
-              _northEast: { lat: lat + 0.1, lng: lon + 0.1 },
-              _southWest: { lat: lat - 0.1, lng: lon - 0.1 }
-          };
+        const lat = mapCenter[0];
+        const lon = mapCenter[1];
+        boundsToUse = {
+          _northEast: { lat: lat + 0.1, lng: lon + 0.1 },
+          _southWest: { lat: lat - 0.1, lng: lon - 0.1 }
+        };
       }
       fetchHeatmap(boundsToUse);
-      
+
     } catch (error) {
       console.error('Error fetching space weather:', error)
     } finally {
@@ -223,27 +223,27 @@ useEffect(() => {
       let north, south, east, west;
 
       if (bounds._northEast && bounds._southWest) {
-          north = bounds._northEast.lat;
-          south = bounds._southWest.lat;
-          east = bounds._northEast.lng;
-          west = bounds._southWest.lng;
-      } 
+        north = bounds._northEast.lat;
+        south = bounds._southWest.lat;
+        east = bounds._northEast.lng;
+        west = bounds._southWest.lng;
+      }
       else if (typeof bounds.getNorth === 'function') {
-          north = bounds.getNorth();
-          south = bounds.getSouth();
-          east = bounds.getEast();
-          west = bounds.getWest();
+        north = bounds.getNorth();
+        south = bounds.getSouth();
+        east = bounds.getEast();
+        west = bounds.getWest();
       }
 
       if (isNaN(north)) return;
 
       const bboxList = [
-          parseFloat(west), 
-          parseFloat(south),
-          parseFloat(east), 
-          parseFloat(north)
+        parseFloat(west),
+        parseFloat(south),
+        parseFloat(east),
+        parseFloat(north)
       ];
-      
+
       const response = await stellarRouteAPI.getHeatmap(bboxList);
       setHeatmapData(response.data);
 
@@ -262,11 +262,11 @@ useEffect(() => {
       setCurrentRouteMode(mode)
 
       let routePath = data.route?.path || [start, end]
-      
+
       if (mode === 'normal' && simulationMode && data.alternatives?.drifted?.path) {
-          routePath = data.alternatives.drifted.path;
+        routePath = data.alternatives.drifted.path;
       } else if (data.alternatives?.normal?.path) {
-          routePath = data.alternatives.normal.path;
+        routePath = data.alternatives.normal.path;
       }
 
       if (!vehicleMoving) {
@@ -274,22 +274,22 @@ useEffect(() => {
         setVehiclePosition(routePath[0])
         lastPositionRef.current = routePath[0]
       }
-      
+
       if (start && end) {
-          if (data.alternatives?.safe?.path) {
-              setImuPath(data.alternatives.safe.path);
-          } else {
-              calculateIMUPath(start, end);
-          }
+        if (data.alternatives?.safe?.path) {
+          setImuPath(data.alternatives.safe.path);
+        } else {
+          calculateIMUPath(start, end);
+        }
       }
-      
+
     } catch (error) {
       console.error('Error calculating route:', error)
     } finally {
       setLoading(false)
     }
   }
-  
+
   const calculateIMUPath = async (start, end) => {
     try {
       const response = await stellarRouteAPI.calculateRoute(start, end, 'safe')
@@ -308,13 +308,13 @@ useEffect(() => {
       const response = await stellarRouteAPI.simulateStorm(scenario, mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
       setSimulationMode(true)
-      
+
       if (startPoint && endPoint) {
-          calculateRoute(startPoint, endPoint, currentRouteMode)
+        calculateRoute(startPoint, endPoint, currentRouteMode)
       }
     } catch (error) { console.error(error); setLoading(false) }
   }
-  
+
   const stopSimulation = async () => {
     try {
       await stellarRouteAPI.stopSimulation()
@@ -328,7 +328,7 @@ useEffect(() => {
   // --- MAP INTERACTION ---
   const handleMapClick = (coords) => {
     if (!activePointType) return;
-    
+
     if (activePointType === 'start') {
       setStartPoint(coords)
       setVehiclePosition(coords)
@@ -350,10 +350,10 @@ useEffect(() => {
     if (!position || !path || path.length === 0) return 0
     let minDist = Infinity
     let closestIndex = 0
-    
+
     path.forEach((point, index) => {
       const dist = Math.sqrt(
-        Math.pow(point[0] - position[0], 2) + 
+        Math.pow(point[0] - position[0], 2) +
         Math.pow(point[1] - position[1], 2)
       )
       if (dist < minDist) {
@@ -368,56 +368,56 @@ useEffect(() => {
   const toggleSystemMode = (targetMode) => {
     const isSafeMode = targetMode === 'safe';
     setCurrentRouteMode(targetMode);
-    
-    const shouldGPSBeActive = !isSafeMode; 
+
+    const shouldGPSBeActive = !isSafeMode;
     setGPSActive(shouldGPSBeActive);
-    
+
     const currentPos = vehiclePosition || startPoint;
     lastPositionRef.current = currentPos;
 
     if (!shouldGPSBeActive) {
       const targetPath = imuPath.length > 0 ? imuPath : (routes.safe?.path || routes.normal?.path || []);
       if (targetPath.length > 0) {
-          const closestIndex = findClosestPathIndex(currentPos, targetPath);
-          const remainingPath = targetPath.slice(closestIndex);
-          imuNavigatorRef.current = new VehicleAnimator(remainingPath);
+        const closestIndex = findClosestPathIndex(currentPos, targetPath);
+        const remainingPath = targetPath.slice(closestIndex);
+        imuNavigatorRef.current = new VehicleAnimator(remainingPath);
       }
       setUseIMUNavigation(true);
     } else {
       let targetPath = routes.normal?.path || [];
       if (simulationMode && routes.drifted?.path && routes.drifted.path.length > 0) {
-          targetPath = routes.drifted.path;
+        targetPath = routes.drifted.path;
       }
       if (targetPath.length > 0) {
-          const closestIndex = findClosestPathIndex(currentPos, targetPath);
-          const remainingPath = targetPath.slice(closestIndex);
-          vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
+        const closestIndex = findClosestPathIndex(currentPos, targetPath);
+        const remainingPath = targetPath.slice(closestIndex);
+        vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
       }
       if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS();
       setUseIMUNavigation(false);
-      setDriftPath([]); 
+      setDriftPath([]);
     }
   };
 
   const handleGPSFailureToggle = () => {
-      const newMode = gpsActive ? 'safe' : 'normal';
-      toggleSystemMode(newMode);
+    const newMode = gpsActive ? 'safe' : 'normal';
+    toggleSystemMode(newMode);
   };
 
   const toggleRealTimeMode = () => {
-      const newState = !realTimeMode;
-      setRealTimeMode(newState);
-      if (newState) {
-          setVehicleMoving(false); 
-          setGPSActive(false);     
-          setUseIMUNavigation(true); 
-          setDriftPath([]);        
-          setLastSensorTime(0);    
-          alert("Real-Time Mode Active! Move your phone to navigate.");
-      } else {
-          setGPSActive(true);
-          setUseIMUNavigation(false);
-      }
+    const newState = !realTimeMode;
+    setRealTimeMode(newState);
+    if (newState) {
+      setVehicleMoving(false);
+      setGPSActive(false);
+      setUseIMUNavigation(true);
+      setDriftPath([]);
+      setLastSensorTime(0);
+      alert("Real-Time Mode Active! Move your phone to navigate.");
+    } else {
+      setGPSActive(true);
+      setUseIMUNavigation(false);
+    }
   };
 
   // --- ANIMATION LOOP ---
@@ -427,15 +427,15 @@ useEffect(() => {
       if (vehicleMoving && !realTimeMode) {
         let displayPosition;
         if (gpsActive) {
-             if (vehicleAnimatorRef.current) displayPosition = vehicleAnimatorRef.current.update();
+          if (vehicleAnimatorRef.current) displayPosition = vehicleAnimatorRef.current.update();
         } else {
-             if (imuNavigatorRef.current) displayPosition = imuNavigatorRef.current.update();
+          if (imuNavigatorRef.current) displayPosition = imuNavigatorRef.current.update();
         }
-        
+
         if (displayPosition) {
-            setVehiclePosition(displayPosition);
-            const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
-            if (currentAnimator && !currentAnimator.isMoving) setVehicleMoving(false);
+          setVehiclePosition(displayPosition);
+          const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
+          if (currentAnimator && !currentAnimator.isMoving) setVehicleMoving(false);
         }
         animationId = requestAnimationFrame(animate);
       }
@@ -455,15 +455,15 @@ useEffect(() => {
 
   const resetSimulation = () => {
     setVehicleMoving(false)
-    setRealTimeMode(false) 
+    setRealTimeMode(false)
     setGPSActive(true)
     setUseIMUNavigation(false)
     setDriftPath([])
     setVehiclePosition(startPoint)
     stopSimulation()
-    
+
     lastPositionRef.current = startPoint
-    
+
     if (gpsSimulatorRef.current) gpsSimulatorRef.current.reset()
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
@@ -485,73 +485,73 @@ useEffect(() => {
   }
 
   // --- CHAOS MODE AUDIO ---
-const playChaosAudio = () => {
-  if (!chaosAudio || !chaosMode) return;
-  
-  // Create audio context
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  
-  // Create siren sound
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-  
-  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.5);
-  
-  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.02, audioContext.currentTime + 0.5);
-  
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.5);
-  
-  // Play static randomly
-  if (Math.random() > 0.7) {
-    setTimeout(() => {
-      const noise = audioContext.createBufferSource();
-      const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.5, audioContext.sampleRate);
-      const data = buffer.getChannelData(0);
-      
-      for (let i = 0; i < buffer.length; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      
-      noise.buffer = buffer;
-      const noiseGain = audioContext.createGain();
-      noiseGain.gain.value = 0.05;
-      
-      noise.connect(noiseGain);
-      noiseGain.connect(audioContext.destination);
-      noise.start();
-      noise.stop(audioContext.currentTime + 0.3);
-    }, 300);
-  }
-};
+  const playChaosAudio = () => {
+    if (!chaosAudio || !chaosMode) return;
 
-// Effect for chaos audio
-useEffect(() => {
-  if (chaosMode && chaosAudio) {
-    const interval = setInterval(() => {
-      playChaosAudio();
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }
-}, [chaosMode, chaosAudio]);
+    // Create audio context
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-useEffect(() => {
-  if (chaosMode && chaosAudio) {
-    audioManager.loadAudio('siren', '/src/assets/audio/emergency_siren.mp3');
-    audioManager.play('siren');
-    audioManager.setVolume('siren', 0.2);
-  } else {
-    audioManager.stop('siren');
-  }
-}, [chaosMode, chaosAudio]);
+    // Create siren sound
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
 
-if (authChecking) {
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.5);
+
+    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.02, audioContext.currentTime + 0.5);
+
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.5);
+
+    // Play static randomly
+    if (Math.random() > 0.7) {
+      setTimeout(() => {
+        const noise = audioContext.createBufferSource();
+        const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.5, audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+
+        for (let i = 0; i < buffer.length; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        noise.buffer = buffer;
+        const noiseGain = audioContext.createGain();
+        noiseGain.gain.value = 0.05;
+
+        noise.connect(noiseGain);
+        noiseGain.connect(audioContext.destination);
+        noise.start();
+        noise.stop(audioContext.currentTime + 0.3);
+      }, 300);
+    }
+  };
+
+  // Effect for chaos audio
+  useEffect(() => {
+    if (chaosMode && chaosAudio) {
+      const interval = setInterval(() => {
+        playChaosAudio();
+      }, 2000);
+
+      return () => clearInterval(interval);
+    }
+  }, [chaosMode, chaosAudio]);
+
+  useEffect(() => {
+    if (chaosMode && chaosAudio) {
+      audioManager.loadAudio('siren', '/src/assets/audio/emergency_siren.mp3');
+      audioManager.play('siren');
+      audioManager.setVolume('siren', 0.2);
+    } else {
+      audioManager.stop('siren');
+    }
+  }, [chaosMode, chaosAudio]);
+
+  if (authChecking) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -561,84 +561,84 @@ if (authChecking) {
       </div>
     );
   }
-  
+
   return (
-  <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
-    
-    {/* CHAOS OVERLAY EFFECTS */}
-    {chaosMode && (
-      <>
-        {/* Red pulsing overlay */}
-        <div className="fixed inset-0 pointer-events-none z-40">
-          <div className={`absolute inset-0 ${chaosIntensity >= 3 ? 'bg-red-500/10 animate-pulse' : 'bg-red-500/5'}`}></div>
-          
-          {/* Screen shake effect */}
-          <div className={`absolute inset-0 ${chaosIntensity >= 2 ? 'animate-shake' : ''}`}></div>
-          
-          {/* VHS scan lines */}
-          <div className="absolute inset-0" style={{
-            backgroundImage: `linear-gradient(
+    <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
+
+      {/* CHAOS OVERLAY EFFECTS */}
+      {chaosMode && (
+        <>
+          {/* Red pulsing overlay */}
+          <div className="fixed inset-0 pointer-events-none z-40">
+            <div className={`absolute inset-0 ${chaosIntensity >= 3 ? 'bg-red-500/10 animate-pulse' : 'bg-red-500/5'}`}></div>
+
+            {/* Screen shake effect */}
+            <div className={`absolute inset-0 ${chaosIntensity >= 2 ? 'animate-shake' : ''}`}></div>
+
+            {/* VHS scan lines */}
+            <div className="absolute inset-0" style={{
+              backgroundImage: `linear-gradient(
               to bottom,
               transparent 50%,
               rgba(0, 255, 255, 0.03) 50%
             )`,
-            backgroundSize: '100% 4px',
-            opacity: chaosIntensity >= 3 ? 0.3 : 0.1
-          }}></div>
-          
-          {/* Emergency border */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
-          
-          {/* Glitch particles */}
-          {[...Array(chaosIntensity * 5)].map((_, i) => (
-            <div 
-              key={i}
-              className="absolute w-1 h-1 bg-red-500 rounded-full animate-ping"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                opacity: Math.random() * 0.5
-              }}
-            />
-          ))}
-        </div>
-        
-        {/* Emergency Banner */}
-        <div className={`relative z-50 ${chaosIntensity >= 4 ? 'animate-shake-hard' : 'animate-shake'}`}>
-          <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-600 text-yellow-300 text-center p-3 text-xl font-black border-y-4 border-yellow-400 animate-flash chaos-text">
-            <div className="flex items-center justify-center gap-4">
-              <span className="text-2xl">🚨</span>
-              <span>SOLAR ARMAGEDDON! Kp: OVER 9000!</span>
-              <span className="text-2xl">🚨</span>
-            </div>
-            <div className="text-sm text-yellow-200 mt-1">
-              ANNOUNCE WINNERS SOON!
+              backgroundSize: '100% 4px',
+              opacity: chaosIntensity >= 3 ? 0.3 : 0.1
+            }}></div>
+
+            {/* Emergency border */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
+            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
+
+            {/* Glitch particles */}
+            {[...Array(chaosIntensity * 5)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-red-500 rounded-full animate-ping"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  opacity: Math.random() * 0.5
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Emergency Banner */}
+          <div className={`relative z-50 ${chaosIntensity >= 4 ? 'animate-shake-hard' : 'animate-shake'}`}>
+            <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-600 text-yellow-300 text-center p-3 text-xl font-black border-y-4 border-yellow-400 animate-flash chaos-text">
+              <div className="flex items-center justify-center gap-4">
+                <span className="text-2xl">🚨</span>
+                <span>SOLAR ARMAGEDDON! Kp: OVER 9000!</span>
+                <span className="text-2xl">🚨</span>
+              </div>
+              <div className="text-sm text-yellow-200 mt-1">
+                ANNOUNCE WINNERS SOON!
+              </div>
             </div>
           </div>
-        </div>
-        
-        {/* Breaking News Ticker */}
-        {chaosIntensity >= 2 && (
-          <div className="w-full overflow-hidden bg-red-900 border-b-2 border-yellow-400 h-8 relative z-40">
-            <div className="flex items-center h-full">
-              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
-                🚨 BREAKING
-              </div>
-              <div className="flex-1 overflow-hidden relative h-full">
-                <div className="absolute whitespace-nowrap text-yellow-300 font-semibold text-sm flex items-center h-full animate-ticker">
-                  GPS SYSTEMS FAILING WORLDWIDE • SOLAR FLARE IMPACT MAXIMUM • EMERGENCY PROTOCOLS ACTIVATED • NAVIGATION COMPROMISED • SYSTEM CRITICAL
+
+          {/* Breaking News Ticker */}
+          {chaosIntensity >= 2 && (
+            <div className="w-full overflow-hidden bg-red-900 border-b-2 border-yellow-400 h-8 relative z-40">
+              <div className="flex items-center h-full">
+                <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
+                  🚨 BREAKING
+                </div>
+                <div className="flex-1 overflow-hidden relative h-full">
+                  <div className="absolute whitespace-nowrap text-yellow-300 font-semibold text-sm flex items-center h-full animate-ticker">
+                    GPS SYSTEMS FAILING WORLDWIDE • SOLAR FLARE IMPACT MAXIMUM • EMERGENCY PROTOCOLS ACTIVATED • NAVIGATION COMPROMISED • SYSTEM CRITICAL
+                  </div>
+                </div>
+                <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
+                  🚨
                 </div>
               </div>
-              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
-                🚨
-              </div>
             </div>
-          </div>
-        )}
-      </>
-    )}
+          )}
+        </>
+      )}
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
@@ -704,7 +704,7 @@ if (authChecking) {
           </div>
         </div>
       </header>
-      
+
       {/* POINT SELECTION MODAL */}
       {activePointType === 'selecting' && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] animate-fade-in">
@@ -729,7 +729,7 @@ if (authChecking) {
           </div>
         </div>
       )}
-      
+
       {/* SELECTION INDICATOR */}
       {(activePointType === 'start' || activePointType === 'end') && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[2000] bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
@@ -740,115 +740,115 @@ if (authChecking) {
       )}
 
       {/* Main Content */}
-<main className="container mx-auto px-4 py-6">
-  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-    
-    {/* Left Column - Weather and Globe */}
-    <div className="lg:col-span-1 space-y-6">
-      {/* 1. LIVE SENSOR TOGGLE - Compact version */}
-      <div className="glass-card p-3 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
-            <div className="flex flex-col">
-              <span className="font-bold text-gray-800 text-sm leading-tight">Live Sensors</span>
-              <span className="text-[9px] text-gray-500">Firebase: {realTimeMode ? 'Active' : 'Idle'}</span>
+      <main className="container mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+          {/* Left Column - Weather and Globe */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* 1. LIVE SENSOR TOGGLE - Compact version */}
+            <div className="glass-card p-3 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-800 text-sm leading-tight">Live Sensors</span>
+                    <span className="text-[9px] text-gray-500">Firebase: {realTimeMode ? 'Active' : 'Idle'}</span>
+                  </div>
+                </div>
+                <button onClick={toggleRealTimeMode} className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-all ${realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                  {realTimeMode ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            </div>
+
+            {/* 2. SOLAR STORM 3D GLOBE - Smaller */}
+            <div className="h-[300px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
+              <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} compact={true} />
+            </div>
+
+            {/* 3. SPACE WEATHER PANEL - Compact */}
+            <SpaceWeatherPanel
+              spaceWeather={spaceWeather}
+              onRefresh={fetchSpaceWeather}
+              onSimulate={simulateStorm}
+              simulationMode={simulationMode}
+              loading={loading}
+              compact={true}
+            />
+          </div>
+
+          {/* Middle Column - Map */}
+          <div className="lg:col-span-2">
+            <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
+              {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
+              <MapComponent
+                center={mapCenter}
+                zoom={12}
+                heatmapData={heatmapData}
+                routes={routes}
+                vehiclePosition={vehiclePosition}
+                startPoint={startPoint}
+                endPoint={endPoint}
+                gpsActive={gpsActive}
+                imuPath={imuPath}
+                driftPath={driftPath}
+                useIMUNavigation={useIMUNavigation}
+                onMapClick={handleMapClick}
+                onBoundsChange={handleBoundsChange}
+                chaosMode={chaosMode}
+                chaosIntensity={chaosIntensity}
+              />
+            </div>
+
+            {/* Status Bar below map */}
+            <div className="mt-4 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {gpsActive ? 'GPS Active' : 'IMU Active'}
+                  </div>
+                  {realTimeMode && <div className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Live Mode</div>}
+                </div>
+                <div className="text-xs text-gray-600">
+                  {vehiclePosition && <span>Position: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Route Comparison below map */}
+            <div className="mt-4">
+              <RouteComparison
+                routes={routes}
+                currentMode={currentRouteMode}
+                onSelectRoute={toggleSystemMode}
+                compact={true}
+              />
             </div>
           </div>
-          <button onClick={toggleRealTimeMode} className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-all ${ realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300' }`}>
-            {realTimeMode ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      </div>
 
-      {/* 2. SOLAR STORM 3D GLOBE - Smaller */}
-      <div className="h-[300px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
-        <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} compact={true} />
-      </div>
-
-      {/* 3. SPACE WEATHER PANEL - Compact */}
-      <SpaceWeatherPanel
-        spaceWeather={spaceWeather}
-        onRefresh={fetchSpaceWeather}
-        onSimulate={simulateStorm}
-        simulationMode={simulationMode}
-        loading={loading}
-        compact={true}
-      />
-    </div>
-
-    {/* Middle Column - Map */}
-    <div className="lg:col-span-2">
-      <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
-        {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
-        <MapComponent
-          center={mapCenter}
-          zoom={12}
-          heatmapData={heatmapData}
-          routes={routes}
-          vehiclePosition={vehiclePosition}
-          startPoint={startPoint}
-          endPoint={endPoint}
-          gpsActive={gpsActive}
-          imuPath={imuPath}
-          driftPath={driftPath}
-          useIMUNavigation={useIMUNavigation}
-          onMapClick={handleMapClick}
-          onBoundsChange={handleBoundsChange}
-          chaosMode={chaosMode}
-          chaosIntensity={chaosIntensity}
-        />
-      </div>
-
-      {/* Status Bar below map */}
-      <div className="mt-4 p-3 bg-white rounded-lg shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className={`px-2 py-1 rounded-full text-xs font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {gpsActive ? 'GPS Active' : 'IMU Active'}
+          {/* Right Column - Controls */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Control Panel - Full height */}
+            <div className="h-full">
+              <ControlPanel
+                routeMode={currentRouteMode}
+                onRouteModeChange={toggleSystemMode}
+                gpsActive={gpsActive}
+                onGPSFailureToggle={handleGPSFailureToggle}
+                vehicleMoving={vehicleMoving}
+                onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
+                onReset={resetSimulation}
+                onSetPoints={() => setActivePointType('selecting')}
+                onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
+                startPoint={startPoint}
+                endPoint={endPoint}
+                onUseDemoRoute={useDemoRoute}
+                compact={false}
+              />
             </div>
-            {realTimeMode && <div className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Live Mode</div>}
-          </div>
-          <div className="text-xs text-gray-600">
-            {vehiclePosition && <span>Position: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
-          </div>
-        </div>
-      </div>
 
-      {/* Route Comparison below map */}
-      <div className="mt-4">
-        <RouteComparison
-          routes={routes}
-          currentMode={currentRouteMode}
-          onSelectRoute={toggleSystemMode}
-          compact={true}
-        />
-      </div>
-    </div>
-
-    {/* Right Column - Controls */}
-    <div className="lg:col-span-1 space-y-6">
-      {/* Control Panel - Full height */}
-      <div className="h-full">
-        <ControlPanel
-          routeMode={currentRouteMode}
-          onRouteModeChange={toggleSystemMode}
-          gpsActive={gpsActive}
-          onGPSFailureToggle={handleGPSFailureToggle}
-          vehicleMoving={vehicleMoving}
-          onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
-          onReset={resetSimulation}
-          onSetPoints={() => setActivePointType('selecting')}
-          onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
-          startPoint={startPoint}
-          endPoint={endPoint}
-          onUseDemoRoute={useDemoRoute}
-          compact={false}
-        />
-      </div>
-
-      {/* Additional info/status card */}
-      {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+            {/* Additional info/status card */}
+            {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           System Status
@@ -879,7 +879,7 @@ if (authChecking) {
         </div>
       </div> */}
 
-      {/* Demo Routes Quick Select
+            {/* Demo Routes Quick Select
       <div className="bg-white rounded-xl p-4 shadow-sm border">
         <h3 className="font-bold text-gray-800 mb-3">Quick Routes</h3>
         <div className="grid grid-cols-2 gap-2">
@@ -909,97 +909,97 @@ if (authChecking) {
           </button>
         </div>
       </div> */}
-    </div>
-  </div>
-
-        {/* CHAOS ERROR POPUPS */}
-{chaosMode && chaosIntensity >= 3 && (
-  <>
-    {[...Array(Math.min(chaosIntensity, 3))].map((_, i) => (
-      <div 
-        key={i}
-        className="fixed z-[10000] p-3 bg-red-900/90 border-2 border-red-600 rounded-lg shadow-lg max-w-xs animate-fade-in"
-        style={{
-          left: `${20 + (i * 25)}%`,
-          top: `${30 + (i * 15)}%`,
-          animationDelay: `${i * 0.5}s`
-        }}
-      >
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 flex-shrink-0" />
-          <div>
-            <div className="font-bold text-red-200 text-sm mb-1">
-              SYSTEM ERROR
-            </div>
-            <div className="text-xs text-white">
-              {[
-                "GPS SIGNAL LOST: Solar interference",
-                "IMU CALIBRATION FAILING",
-                "SATELLITE NETWORK COMPROMISED",
-                "NAVIGATION ACCURACY DEGRADED",
-                "SYSTEM OVERLOAD DETECTED"
-              ][i]}
-            </div>
           </div>
         </div>
-      </div>
-    ))}
-  </>
-)}
 
-{/* SYSTEM STATUS HUD */}
-{chaosMode && (
-  <div className="fixed bottom-4 right-4 z-[9999] w-48 bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-red-500">
-    <div className="text-center text-xs text-red-400 font-bold mb-2">
-      SYSTEM STATUS
-    </div>
-    
-    <div className="space-y-2">
-      <div>
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-300">GPS SIGNAL</span>
-          <span className={`font-bold ${chaosIntensity >= 4 ? 'text-red-400' : 'text-yellow-400'}`}>
-            {chaosIntensity >= 4 ? 'FAILED' : 'UNSTABLE'}
-          </span>
-        </div>
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-red-500 transition-all duration-300"
-            style={{ width: `${100 - (chaosIntensity * 20)}%` }}
-          />
-        </div>
-      </div>
-      
-      <div>
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-300">SYSTEM LOAD</span>
-          <span className="text-red-400 font-bold">{chaosIntensity * 20}%</span>
-        </div>
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-yellow-500 transition-all duration-300"
-            style={{ width: `${chaosIntensity * 20}%` }}
-          />
-        </div>
-      </div>
-      
-      <div className="text-center text-[10px] text-gray-400 mt-2">
-        CHAOS LEVEL: {chaosIntensity}/5
-      </div>
-    </div>
-  </div>
-)}
+        {/* CHAOS ERROR POPUPS */}
+        {chaosMode && chaosIntensity >= 3 && (
+          <>
+            {[...Array(Math.min(chaosIntensity, 3))].map((_, i) => (
+              <div
+                key={i}
+                className="fixed z-[10000] p-3 bg-red-900/90 border-2 border-red-600 rounded-lg shadow-lg max-w-xs animate-fade-in"
+                style={{
+                  left: `${20 + (i * 25)}%`,
+                  top: `${30 + (i * 15)}%`,
+                  animationDelay: `${i * 0.5}s`
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-red-200 text-sm mb-1">
+                      SYSTEM ERROR
+                    </div>
+                    <div className="text-xs text-white">
+                      {[
+                        "GPS SIGNAL LOST: Solar interference",
+                        "IMU CALIBRATION FAILING",
+                        "SATELLITE NETWORK COMPROMISED",
+                        "NAVIGATION ACCURACY DEGRADED",
+                        "SYSTEM OVERLOAD DETECTED"
+                      ][i]}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
 
-{/* FAKE COUNTDOWN TIMER */}
-{chaosMode && chaosIntensity >= 4 && (
-  <div className="fixed top-24 right-4 z-[9999] animate-pulse">
-    <div className="p-3 bg-red-900/90 border-2 border-red-600 rounded-lg text-center min-w-[140px]">
-      <div className="text-xs text-gray-300 mb-1">SYSTEM FAILURE IN</div>
-      <div className="text-2xl font-mono font-bold text-red-400 mb-2">01:{String(59 - (new Date().getSeconds())).padStart(2, '0')}</div>
-      <div className="text-xs text-red-300">TAKE COVER!</div>
-    </div>
-  </div>
-)}
+        {/* SYSTEM STATUS HUD */}
+        {chaosMode && (
+          <div className="fixed bottom-4 right-4 z-[9999] w-48 bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-red-500">
+            <div className="text-center text-xs text-red-400 font-bold mb-2">
+              SYSTEM STATUS
+            </div>
+
+            <div className="space-y-2">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-gray-300">GPS SIGNAL</span>
+                  <span className={`font-bold ${chaosIntensity >= 4 ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {chaosIntensity >= 4 ? 'FAILED' : 'UNSTABLE'}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-500 transition-all duration-300"
+                    style={{ width: `${100 - (chaosIntensity * 20)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-gray-300">SYSTEM LOAD</span>
+                  <span className="text-red-400 font-bold">{chaosIntensity * 20}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-yellow-500 transition-all duration-300"
+                    style={{ width: `${chaosIntensity * 20}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="text-center text-[10px] text-gray-400 mt-2">
+                CHAOS LEVEL: {chaosIntensity}/5
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FAKE COUNTDOWN TIMER */}
+        {chaosMode && chaosIntensity >= 4 && (
+          <div className="fixed top-24 right-4 z-[9999] animate-pulse">
+            <div className="p-3 bg-red-900/90 border-2 border-red-600 rounded-lg text-center min-w-[140px]">
+              <div className="text-xs text-gray-300 mb-1">SYSTEM FAILURE IN</div>
+              <div className="text-2xl font-mono font-bold text-red-400 mb-2">01:{String(59 - (new Date().getSeconds())).padStart(2, '0')}</div>
+              <div className="text-xs text-red-300">TAKE COVER!</div>
+            </div>
+          </div>
+        )}
       </main>
 
       <footer className="mt-8 border-t bg-white py-6">
