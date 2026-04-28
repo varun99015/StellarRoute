@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class NOAAWeatherService:
     def __init__(self):
-        self.base_url = settings.NOAA_BASE_URL   # ✅ from config
+        self.base_url = settings.NOAA_BASE_URL  # ✅ from config
         self.timeout = settings.NOAA_TIMEOUT
 
     async def fetch_kp_index(self) -> List[Dict[str, Any]]:

@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+
 # import os
 import random
 import smtplib
@@ -11,6 +12,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List
 
 import redis.asyncio as redis
+
 # from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
@@ -107,7 +109,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,   # was hardcoded list
+    allow_origins=settings.CORS_ORIGINS,  # was hardcoded list
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
