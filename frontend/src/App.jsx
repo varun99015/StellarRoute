@@ -21,6 +21,8 @@ import { firebaseConfig } from './firebaseConfig';
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
+import { BASE_URL } from './config';
+
 function App() {
   // --- AUTHENTICATION STATE ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -1005,7 +1007,7 @@ if (authChecking) {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-gray-600"><p className="font-medium">StellarRoute - Hackathon Project</p></div>
             <div className="flex items-center gap-4">
-              <button onClick={() => window.open('http://localhost:8000/docs', '_blank')} className="text-sm text-primary hover:text-primary/80">API Documentation</button>
+              <button onClick={() => window.open(`${BASE_URL}/docs`, '_blank')} className="text-sm text-primary hover:text-primary/80">API Documentation</button>
             </div>
           </div>
         </div>
