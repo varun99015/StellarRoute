@@ -482,72 +482,6 @@ useEffect(() => {
     calculateRoute(start, end, currentRouteMode)
   }
 
-  // --- CHAOS MODE AUDIO ---
-const playChaosAudio = () => {
-  if (!chaosAudio || !chaosMode) return;
-  
-  // Create audio context
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  
-  // Create siren sound
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-  
-  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.5);
-  
-  gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.02, audioContext.currentTime + 0.5);
-  
-  oscillator.start();
-  oscillator.stop(audioContext.currentTime + 0.5);
-  
-  // Play static randomly
-  if (Math.random() > 0.7) {
-    setTimeout(() => {
-      const noise = audioContext.createBufferSource();
-      const buffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.5, audioContext.sampleRate);
-      const data = buffer.getChannelData(0);
-      
-      for (let i = 0; i < buffer.length; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      
-      noise.buffer = buffer;
-      const noiseGain = audioContext.createGain();
-      noiseGain.gain.value = 0.05;
-      
-      noise.connect(noiseGain);
-      noiseGain.connect(audioContext.destination);
-      noise.start();
-      noise.stop(audioContext.currentTime + 0.3);
-    }, 300);
-  }
-};
-
-// Effect for chaos audio
-useEffect(() => {
-  if (chaosMode && chaosAudio) {
-    const interval = setInterval(() => {
-      playChaosAudio();
-    }, 2000);
-    
-    return () => clearInterval(interval);
-  }
-}, [chaosMode, chaosAudio]);
-
-useEffect(() => {
-  if (chaosMode && chaosAudio) {
-    audioManager.loadAudio('siren', '/src/assets/audio/emergency_siren.mp3');
-    audioManager.play('siren');
-    audioManager.setVolume('siren', 0.2);
-  } else {
-    audioManager.stop('siren');
-  }
-}, [chaosMode, chaosAudio]);
 
 if (authChecking) {
     return (
@@ -563,80 +497,7 @@ if (authChecking) {
   return (
   <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
     
-    {/* CHAOS OVERLAY EFFECTS */}
-    {chaosMode && (
-      <>
-        {/* Red pulsing overlay */}
-        <div className="fixed inset-0 pointer-events-none z-40">
-          <div className={`absolute inset-0 ${chaosIntensity >= 3 ? 'bg-red-500/10 animate-pulse' : 'bg-red-500/5'}`}></div>
-          
-          {/* Screen shake effect */}
-          <div className={`absolute inset-0 ${chaosIntensity >= 2 ? 'animate-shake' : ''}`}></div>
-          
-          {/* VHS scan lines */}
-          <div className="absolute inset-0" style={{
-            backgroundImage: `linear-gradient(
-              to bottom,
-              transparent 50%,
-              rgba(0, 255, 255, 0.03) 50%
-            )`,
-            backgroundSize: '100% 4px',
-            opacity: chaosIntensity >= 3 ? 0.3 : 0.1
-          }}></div>
-          
-          {/* Emergency border */}
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-yellow-500 to-red-500 animate-flash"></div>
-          
-          {/* Glitch particles */}
-          {[...Array(chaosIntensity * 5)].map((_, i) => (
-            <div 
-              key={i}
-              className="absolute w-1 h-1 bg-red-500 rounded-full animate-ping"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 2}s`,
-                opacity: Math.random() * 0.5
-              }}
-            />
-          ))}
-        </div>
-        
-        {/* Emergency Banner */}
-        <div className={`relative z-50 ${chaosIntensity >= 4 ? 'animate-shake-hard' : 'animate-shake'}`}>
-          <div className="bg-gradient-to-r from-red-600 via-red-700 to-red-600 text-yellow-300 text-center p-3 text-xl font-black border-y-4 border-yellow-400 animate-flash chaos-text">
-            <div className="flex items-center justify-center gap-4">
-              <span className="text-2xl">🚨</span>
-              <span>SOLAR ARMAGEDDON! Kp: OVER 9000!</span>
-              <span className="text-2xl">🚨</span>
-            </div>
-            <div className="text-sm text-yellow-200 mt-1">
-              ANNOUNCE WINNERS SOON!
-            </div>
-          </div>
-        </div>
-        
-        {/* Breaking News Ticker */}
-        {chaosIntensity >= 2 && (
-          <div className="w-full overflow-hidden bg-red-900 border-b-2 border-yellow-400 h-8 relative z-40">
-            <div className="flex items-center h-full">
-              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
-                🚨 BREAKING
-              </div>
-              <div className="flex-1 overflow-hidden relative h-full">
-                <div className="absolute whitespace-nowrap text-yellow-300 font-semibold text-sm flex items-center h-full animate-ticker">
-                  GPS SYSTEMS FAILING WORLDWIDE • SOLAR FLARE IMPACT MAXIMUM • EMERGENCY PROTOCOLS ACTIVATED • NAVIGATION COMPROMISED • SYSTEM CRITICAL
-                </div>
-              </div>
-              <div className="px-4 py-1 bg-red-700 text-white font-bold whitespace-nowrap text-sm">
-                🚨
-              </div>
-            </div>
-          </div>
-        )}
-      </>
-    )}
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 py-4">
@@ -680,7 +541,7 @@ if (authChecking) {
               )}
 
               {/* CHAOS HEADER BUTTON */}
-              <button
+              {/* <button
                 onClick={() => {
                   const newMode = !chaosMode;
                   setChaosMode(newMode);
@@ -693,7 +554,7 @@ if (authChecking) {
                 className={`px-4 py-2 rounded-lg font-bold transition-all ${chaosMode ? 'bg-gradient-to-r from-red-600 to-red-800 text-white shadow-[0_0_20px_rgba(255,0,0,0.7)] animate-pulse' : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-900 hover:to-black'}`}
               >
                 {chaosMode ? '🛑 STOP CHAOS' : '🔥 CHAOS MODE'}
-              </button>
+              </button> */}
 
               <button onClick={resetSimulation} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors">
                 Reset Demo
@@ -910,94 +771,9 @@ if (authChecking) {
     </div>
   </div>
 
-        {/* CHAOS ERROR POPUPS */}
-{chaosMode && chaosIntensity >= 3 && (
-  <>
-    {[...Array(Math.min(chaosIntensity, 3))].map((_, i) => (
-      <div 
-        key={i}
-        className="fixed z-[10000] p-3 bg-red-900/90 border-2 border-red-600 rounded-lg shadow-lg max-w-xs animate-fade-in"
-        style={{
-          left: `${20 + (i * 25)}%`,
-          top: `${30 + (i * 15)}%`,
-          animationDelay: `${i * 0.5}s`
-        }}
-      >
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-300 mt-0.5 flex-shrink-0" />
-          <div>
-            <div className="font-bold text-red-200 text-sm mb-1">
-              SYSTEM ERROR
-            </div>
-            <div className="text-xs text-white">
-              {[
-                "GPS SIGNAL LOST: Solar interference",
-                "IMU CALIBRATION FAILING",
-                "SATELLITE NETWORK COMPROMISED",
-                "NAVIGATION ACCURACY DEGRADED",
-                "SYSTEM OVERLOAD DETECTED"
-              ][i]}
-            </div>
-          </div>
-        </div>
-      </div>
-    ))}
-  </>
-)}
 
-{/* SYSTEM STATUS HUD */}
-{chaosMode && (
-  <div className="fixed bottom-4 right-4 z-[9999] w-48 bg-black/80 backdrop-blur-sm rounded-lg p-3 border border-red-500">
-    <div className="text-center text-xs text-red-400 font-bold mb-2">
-      SYSTEM STATUS
-    </div>
-    
-    <div className="space-y-2">
-      <div>
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-300">GPS SIGNAL</span>
-          <span className={`font-bold ${chaosIntensity >= 4 ? 'text-red-400' : 'text-yellow-400'}`}>
-            {chaosIntensity >= 4 ? 'FAILED' : 'UNSTABLE'}
-          </span>
-        </div>
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-red-500 transition-all duration-300"
-            style={{ width: `${100 - (chaosIntensity * 20)}%` }}
-          />
-        </div>
-      </div>
-      
-      <div>
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-300">SYSTEM LOAD</span>
-          <span className="text-red-400 font-bold">{chaosIntensity * 20}%</span>
-        </div>
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-yellow-500 transition-all duration-300"
-            style={{ width: `${chaosIntensity * 20}%` }}
-          />
-        </div>
-      </div>
-      
-      <div className="text-center text-[10px] text-gray-400 mt-2">
-        CHAOS LEVEL: {chaosIntensity}/5
-      </div>
-    </div>
-  </div>
-)}
 
-{/* FAKE COUNTDOWN TIMER */}
-{chaosMode && chaosIntensity >= 4 && (
-  <div className="fixed top-24 right-4 z-[9999] animate-pulse">
-    <div className="p-3 bg-red-900/90 border-2 border-red-600 rounded-lg text-center min-w-[140px]">
-      <div className="text-xs text-gray-300 mb-1">SYSTEM FAILURE IN</div>
-      <div className="text-2xl font-mono font-bold text-red-400 mb-2">01:{String(59 - (new Date().getSeconds())).padStart(2, '0')}</div>
-      <div className="text-xs text-red-300">TAKE COVER!</div>
-    </div>
-  </div>
-)}
+
       </main>
 
       <footer className="mt-8 border-t bg-white py-6">
@@ -1005,7 +781,7 @@ if (authChecking) {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-gray-600"><p className="font-medium">StellarRoute - Hackathon Project</p></div>
             <div className="flex items-center gap-4">
-              <button onClick={() => window.open('http://localhost:8000/docs', '_blank')} className="text-sm text-primary hover:text-primary/80">API Documentation</button>
+              <button onClick={() => window.open(`${import.meta.env.VITE_API_URL}/docs`, '_blank')} className="text-sm text-primary hover:text-primary/80">API Documentation</button>
             </div>
           </div>
         </div>

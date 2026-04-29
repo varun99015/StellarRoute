@@ -18,7 +18,7 @@ function EmailAuth() {
         setMessage('');
         try {
             // NOTE: Make sure your backend runs on a different port (e.g., 5000)
-            const response = await axios.post('http://localhost:5000/api/auth/request-otp', { email });
+            const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/request-otp`, { email });
             
             // On success, move to the OTP input screen
             setMessage(response.data.message || "Code sent successfully!");
@@ -34,7 +34,8 @@ function EmailAuth() {
         e.preventDefault();
         setMessage('');
         try {
-            await axios.post('http://localhost:5000/api/auth/verify-otp', { email, otp });
+            
+            await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/request-otp`, { email, otp});
             
             // On successful verification, the backend sets the session cookie.
             // Redirect the user to the dashboard or protected area.

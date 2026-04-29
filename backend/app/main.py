@@ -59,6 +59,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 active_connections: List[WebSocket] = []
 
 logging.basicConfig(
@@ -72,12 +73,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+origins = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
@@ -228,6 +224,7 @@ async def verify_otp_and_login(request_body: OtpVerification, response: Response
         key="session_id",
         value=session_token,
         httponly=True,
+        secure=True,
         max_age=SESSION_EXPIRY_SECONDS,
         samesite="Lax",
     )
