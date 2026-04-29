@@ -34,3 +34,32 @@ algorithms/*
 backend/algorithms
 LaptopTesting/*
 LaptopTesting/
+*.pem
+*.env
+
+# Terraform working directory
+.terraform/
+
+# State files (contain real infra + secrets)
+*.tfstate
+*.tfstate.*
+
+# Crash logs
+crash.log
+
+# Sensitive variable files
+*.tfvars
+*.tfvars.json
+
+# CLI config files (may contain credentials)
+.terraformrc
+terraform.rc
+
+# Override files (local-only hacks)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Lock file (depends, see below)
+.terraform.lock.hcl
