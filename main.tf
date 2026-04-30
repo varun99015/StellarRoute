@@ -56,6 +56,13 @@ resource "aws_security_group" "stellar_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+    ingress {
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   # Egress: Allow server to talk to the internet (to download Docker)
   egress {
     from_port   = 0
