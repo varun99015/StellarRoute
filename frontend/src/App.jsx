@@ -18,7 +18,7 @@ function App() {
   const [userName, setUserName] = useState(null);
   const [authChecking, setAuthChecking] = useState(true); // Prevents UI flicker while checking
   const [showLoginModal, setShowLoginModal] = useState(false);
-  
+
   // --- REAL-TIME SENSOR STATE ---
   const [realTimeMode, setRealTimeMode] = useState(false);
   const [lastSensorTime, setLastSensorTime] = useState(0);
@@ -35,9 +35,9 @@ function App() {
   const [driftPath, setDriftPath] = useState([])
 
   // --- MAP STATE ---
-  const [mapCenter] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
-  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
-  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.OAKLAND)
+  const [mapCenter] = useState(DEMO_COORDINATES.Bengaluru)
+  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.Bengaluru)
+  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.Mumbai)
   const [mapBounds, setMapBounds] = useState(null)
 
   // --- SIMULATION STATE ---
@@ -45,7 +45,7 @@ function App() {
   const [vehicleMoving, setVehicleMoving] = useState(false)
   const [vehiclePosition, setVehiclePosition] = useState(null)
   const [useIMUNavigation, setUseIMUNavigation] = useState(false)
-  
+
   const [chaosMode, setChaosMode] = useState(false)
   const [chaosIntensity, setChaosIntensity] = useState(3)
   const [chaosAudio, setChaosAudio] = useState(true)
@@ -55,21 +55,21 @@ function App() {
   const gpsSimulatorRef = useRef(null)
   const vehicleAnimatorRef = useRef(null)
   const imuNavigatorRef = useRef(null)
-  const lastPositionRef = useRef(null) 
+  const lastPositionRef = useRef(null)
 
   // --- PERSISTENCE EFFECT ---
-useEffect(() => {
+  useEffect(() => {
     const verifySession = async () => {
       try {
         // This hits /api/auth/status which securely validates the HttpOnly JWT cookie
         const response = await stellarRouteAPI.checkAuthStatus();
-        
+
         if (response.data.status === 'authenticated') {
           setIsLoggedIn(true);
           // Set username from the JWT payload (e.g., extracting the name from the email)
           const emailName = response.data.user_email.split('@')[0];
           setUserName(emailName);
-          
+
           // Sync safe display data to localStorage
           localStorage.setItem('stellar_isLoggedIn', 'true');
           localStorage.setItem('stellar_userName', emailName);
@@ -91,30 +91,30 @@ useEffect(() => {
 
   // --- MATH HELPER FOR REAL-TIME ---
   const calculateNewPosition = (currentLat, currentLon, sensorData, prevTime) => {
-      const R = 6371e3;
-      const now = sensorData.timestamp;
-      const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
-      
-      if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
+    const R = 6371e3;
+    const now = sensorData.timestamp;
+    const dt = prevTime === 0 ? 0.1 : (now - prevTime) / 1000;
 
-      const speed = (sensorData.speed || 0) / 3.6;
-      const d = speed * dt;
-      const brng = (sensorData.heading || 0) * Math.PI / 180;
-      
-      const lat1 = currentLat * Math.PI / 180;
-      const lon1 = currentLon * Math.PI / 180;
+    if (dt > 2.0 || dt < 0) return { lat: currentLat, lon: currentLon, timestamp: now };
 
-      const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d/R) +
-                  Math.cos(lat1) * Math.sin(d/R) * Math.cos(brng));
-      
-      const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d/R) * Math.cos(lat1),
-                           Math.cos(d/R) - Math.sin(lat1) * Math.sin(lat2));
+    const speed = (sensorData.speed || 0) / 3.6;
+    const d = speed * dt;
+    const brng = (sensorData.heading || 0) * Math.PI / 180;
 
-      return {
-          lat: lat2 * 180 / Math.PI,
-          lon: lon2 * 180 / Math.PI,
-          timestamp: now
-      };
+    const lat1 = currentLat * Math.PI / 180;
+    const lon1 = currentLon * Math.PI / 180;
+
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d / R) +
+      Math.cos(lat1) * Math.sin(d / R) * Math.cos(brng));
+
+    const lon2 = lon1 + Math.atan2(Math.sin(brng) * Math.sin(d / R) * Math.cos(lat1),
+      Math.cos(d / R) - Math.sin(lat1) * Math.sin(lat2));
+
+    return {
+      lat: lat2 * 180 / Math.PI,
+      lon: lon2 * 180 / Math.PI,
+      timestamp: now
+    };
   }
 
 
@@ -122,8 +122,8 @@ useEffect(() => {
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
     setIsLoggedIn(true);
-    setUserName(userDisplayName); 
-    setShowLoginModal(false); 
+    setUserName(userDisplayName);
+    setShowLoginModal(false);
   };
 
   const handleLogout = async () => {
@@ -134,7 +134,7 @@ useEffect(() => {
     } finally {
       setIsLoggedIn(false);
       setUserName(null);
-      localStorage.clear(); 
+      localStorage.clear();
     }
   };
 
@@ -143,7 +143,7 @@ useEffect(() => {
     fetchSpaceWeather()
     gpsSimulatorRef.current = new GPSSimulator(startPoint)
     imuNavigatorRef.current = new VehicleAnimator([startPoint])
-    
+
     setTimeout(() => {
       calculateRoute(startPoint, endPoint, 'normal')
     }, 1000)
@@ -155,18 +155,18 @@ useEffect(() => {
       setLoading(true)
       const response = await stellarRouteAPI.getCurrentSpaceWeather(mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
-      
+
       let boundsToUse = mapBounds;
       if (!boundsToUse) {
-          const lat = mapCenter[0];
-          const lon = mapCenter[1];
-          boundsToUse = {
-              _northEast: { lat: lat + 0.1, lng: lon + 0.1 },
-              _southWest: { lat: lat - 0.1, lng: lon - 0.1 }
-          };
+        const lat = mapCenter[0];
+        const lon = mapCenter[1];
+        boundsToUse = {
+          _northEast: { lat: lat + 0.1, lng: lon + 0.1 },
+          _southWest: { lat: lat - 0.1, lng: lon - 0.1 }
+        };
       }
       fetchHeatmap(boundsToUse);
-      
+
     } catch (error) {
       console.error('Error fetching space weather:', error)
     } finally {
@@ -181,27 +181,27 @@ useEffect(() => {
       let north, south, east, west;
 
       if (bounds._northEast && bounds._southWest) {
-          north = bounds._northEast.lat;
-          south = bounds._southWest.lat;
-          east = bounds._northEast.lng;
-          west = bounds._southWest.lng;
-      } 
+        north = bounds._northEast.lat;
+        south = bounds._southWest.lat;
+        east = bounds._northEast.lng;
+        west = bounds._southWest.lng;
+      }
       else if (typeof bounds.getNorth === 'function') {
-          north = bounds.getNorth();
-          south = bounds.getSouth();
-          east = bounds.getEast();
-          west = bounds.getWest();
+        north = bounds.getNorth();
+        south = bounds.getSouth();
+        east = bounds.getEast();
+        west = bounds.getWest();
       }
 
       if (isNaN(north)) return;
 
       const bboxList = [
-          parseFloat(west), 
-          parseFloat(south),
-          parseFloat(east), 
-          parseFloat(north)
+        parseFloat(west),
+        parseFloat(south),
+        parseFloat(east),
+        parseFloat(north)
       ];
-      
+
       const response = await stellarRouteAPI.getHeatmap(bboxList);
       setHeatmapData(response.data);
 
@@ -220,11 +220,11 @@ useEffect(() => {
       setCurrentRouteMode(mode)
 
       let routePath = data.route?.path || [start, end]
-      
+
       if (mode === 'normal' && simulationMode && data.alternatives?.drifted?.path) {
-          routePath = data.alternatives.drifted.path;
+        routePath = data.alternatives.drifted.path;
       } else if (data.alternatives?.normal?.path) {
-          routePath = data.alternatives.normal.path;
+        routePath = data.alternatives.normal.path;
       }
 
       if (!vehicleMoving) {
@@ -232,22 +232,22 @@ useEffect(() => {
         setVehiclePosition(routePath[0])
         lastPositionRef.current = routePath[0]
       }
-      
+
       if (start && end) {
-          if (data.alternatives?.safe?.path) {
-              setImuPath(data.alternatives.safe.path);
-          } else {
-              calculateIMUPath(start, end);
-          }
+        if (data.alternatives?.safe?.path) {
+          setImuPath(data.alternatives.safe.path);
+        } else {
+          calculateIMUPath(start, end);
+        }
       }
-      
+
     } catch (error) {
       console.error('Error calculating route:', error)
     } finally {
       setLoading(false)
     }
   }
-  
+
   const calculateIMUPath = async (start, end) => {
     try {
       const response = await stellarRouteAPI.calculateRoute(start, end, 'safe')
@@ -266,13 +266,13 @@ useEffect(() => {
       const response = await stellarRouteAPI.simulateStorm(scenario, mapCenter[0], mapCenter[1])
       setSpaceWeather(response.data)
       setSimulationMode(true)
-      
+
       if (startPoint && endPoint) {
-          calculateRoute(startPoint, endPoint, currentRouteMode)
+        calculateRoute(startPoint, endPoint, currentRouteMode)
       }
     } catch (error) { console.error(error); setLoading(false) }
   }
-  
+
   const stopSimulation = async () => {
     try {
       await stellarRouteAPI.stopSimulation()
@@ -286,7 +286,7 @@ useEffect(() => {
   // --- MAP INTERACTION ---
   const handleMapClick = (coords) => {
     if (!activePointType) return;
-    
+
     if (activePointType === 'start') {
       setStartPoint(coords)
       setVehiclePosition(coords)
@@ -308,10 +308,10 @@ useEffect(() => {
     if (!position || !path || path.length === 0) return 0
     let minDist = Infinity
     let closestIndex = 0
-    
+
     path.forEach((point, index) => {
       const dist = Math.sqrt(
-        Math.pow(point[0] - position[0], 2) + 
+        Math.pow(point[0] - position[0], 2) +
         Math.pow(point[1] - position[1], 2)
       )
       if (dist < minDist) {
@@ -326,56 +326,56 @@ useEffect(() => {
   const toggleSystemMode = (targetMode) => {
     const isSafeMode = targetMode === 'safe';
     setCurrentRouteMode(targetMode);
-    
-    const shouldGPSBeActive = !isSafeMode; 
+
+    const shouldGPSBeActive = !isSafeMode;
     setGPSActive(shouldGPSBeActive);
-    
+
     const currentPos = vehiclePosition || startPoint;
     lastPositionRef.current = currentPos;
 
     if (!shouldGPSBeActive) {
       const targetPath = imuPath.length > 0 ? imuPath : (routes.safe?.path || routes.normal?.path || []);
       if (targetPath.length > 0) {
-          const closestIndex = findClosestPathIndex(currentPos, targetPath);
-          const remainingPath = targetPath.slice(closestIndex);
-          imuNavigatorRef.current = new VehicleAnimator(remainingPath);
+        const closestIndex = findClosestPathIndex(currentPos, targetPath);
+        const remainingPath = targetPath.slice(closestIndex);
+        imuNavigatorRef.current = new VehicleAnimator(remainingPath);
       }
       setUseIMUNavigation(true);
     } else {
       let targetPath = routes.normal?.path || [];
       if (simulationMode && routes.drifted?.path && routes.drifted.path.length > 0) {
-          targetPath = routes.drifted.path;
+        targetPath = routes.drifted.path;
       }
       if (targetPath.length > 0) {
-          const closestIndex = findClosestPathIndex(currentPos, targetPath);
-          const remainingPath = targetPath.slice(closestIndex);
-          vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
+        const closestIndex = findClosestPathIndex(currentPos, targetPath);
+        const remainingPath = targetPath.slice(closestIndex);
+        vehicleAnimatorRef.current = new VehicleAnimator(remainingPath);
       }
       if (gpsSimulatorRef.current) gpsSimulatorRef.current.restoreGPS();
       setUseIMUNavigation(false);
-      setDriftPath([]); 
+      setDriftPath([]);
     }
   };
 
   const handleGPSFailureToggle = () => {
-      const newMode = gpsActive ? 'safe' : 'normal';
-      toggleSystemMode(newMode);
+    const newMode = gpsActive ? 'safe' : 'normal';
+    toggleSystemMode(newMode);
   };
 
   const toggleRealTimeMode = () => {
-      const newState = !realTimeMode;
-      setRealTimeMode(newState);
-      if (newState) {
-          setVehicleMoving(false); 
-          setGPSActive(false);     
-          setUseIMUNavigation(true); 
-          setDriftPath([]);        
-          setLastSensorTime(0);    
-          alert("Real-Time Mode Active! Move your phone to navigate.");
-      } else {
-          setGPSActive(true);
-          setUseIMUNavigation(false);
-      }
+    const newState = !realTimeMode;
+    setRealTimeMode(newState);
+    if (newState) {
+      setVehicleMoving(false);
+      setGPSActive(false);
+      setUseIMUNavigation(true);
+      setDriftPath([]);
+      setLastSensorTime(0);
+      alert("Real-Time Mode Active! Move your phone to navigate.");
+    } else {
+      setGPSActive(true);
+      setUseIMUNavigation(false);
+    }
   };
 
   // --- ANIMATION LOOP ---
@@ -385,15 +385,15 @@ useEffect(() => {
       if (vehicleMoving && !realTimeMode) {
         let displayPosition;
         if (gpsActive) {
-             if (vehicleAnimatorRef.current) displayPosition = vehicleAnimatorRef.current.update();
+          if (vehicleAnimatorRef.current) displayPosition = vehicleAnimatorRef.current.update();
         } else {
-             if (imuNavigatorRef.current) displayPosition = imuNavigatorRef.current.update();
+          if (imuNavigatorRef.current) displayPosition = imuNavigatorRef.current.update();
         }
-        
+
         if (displayPosition) {
-            setVehiclePosition(displayPosition);
-            const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
-            if (currentAnimator && !currentAnimator.isMoving) setVehicleMoving(false);
+          setVehiclePosition(displayPosition);
+          const currentAnimator = gpsActive ? vehicleAnimatorRef.current : imuNavigatorRef.current;
+          if (currentAnimator && !currentAnimator.isMoving) setVehicleMoving(false);
         }
         animationId = requestAnimationFrame(animate);
       }
@@ -413,15 +413,15 @@ useEffect(() => {
 
   const resetSimulation = () => {
     setVehicleMoving(false)
-    setRealTimeMode(false) 
+    setRealTimeMode(false)
     setGPSActive(true)
     setUseIMUNavigation(false)
     setDriftPath([])
     setVehiclePosition(startPoint)
     stopSimulation()
-    
+
     lastPositionRef.current = startPoint
-    
+
     if (gpsSimulatorRef.current) gpsSimulatorRef.current.reset()
     if (vehicleAnimatorRef.current) {
       vehicleAnimatorRef.current.reset()
@@ -433,17 +433,50 @@ useEffect(() => {
   const useDemoRoute = (routeName) => {
     let start, end
     switch (routeName) {
-      case 'SF_OAKLAND': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.OAKLAND; break
-      case 'SF_BERKELEY': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.BERKELEY; break
-      case 'SF_SAN_JOSE': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.SAN_JOSE; break
-      default: return
+      case 'BLR_MUMBAI':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.MUMBAI
+        break
+
+      case 'BLR_GOA':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.GOA
+        break
+
+      case 'BLR_MANGALURU':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.MANGALURU
+        break
+
+      case 'BLR_SHIVAMOGGA':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.SHIVAMOGGA
+        break
+
+      case 'BLR_KARWAR':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.KARWAR
+        break
+
+      case 'BLR_CHIKKABALLAPUR':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.CHIKKABALLAPUR
+        break
+
+      case 'BLR_HYDERABAD':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.HYDERABAD
+        break
+
+      default:
+        return
     }
     setStartPoint(start); setEndPoint(end); setVehiclePosition(start)
     calculateRoute(start, end, currentRouteMode)
   }
 
 
-if (authChecking) {
+  if (authChecking) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -453,10 +486,10 @@ if (authChecking) {
       </div>
     );
   }
-  
+
   return (
-  <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
-    
+    <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
+
 
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
@@ -523,7 +556,7 @@ if (authChecking) {
           </div>
         </div>
       </header>
-      
+
       {/* POINT SELECTION MODAL */}
       {activePointType === 'selecting' && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[2000] animate-fade-in">
@@ -548,7 +581,7 @@ if (authChecking) {
           </div>
         </div>
       )}
-      
+
       {/* SELECTION INDICATOR */}
       {(activePointType === 'start' || activePointType === 'end') && (
         <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-[2000] bg-gray-900/90 text-white px-6 py-3 rounded-full shadow-lg backdrop-blur-sm animate-bounce-subtle flex items-center gap-3">
@@ -559,115 +592,115 @@ if (authChecking) {
       )}
 
       {/* Main Content */}
-<main className="container mx-auto px-4 py-6">
-  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-    
-    {/* Left Column - Weather and Globe */}
-    <div className="lg:col-span-1 space-y-6">
-      {/* 1. LIVE SENSOR TOGGLE - Compact version */}
-      <div className="glass-card p-3 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
-            <div className="flex flex-col">
-              <span className="font-bold text-gray-800 text-sm leading-tight">Live Sensors</span>
-              <span className="text-[9px] text-gray-500">Firebase: {realTimeMode ? 'Active' : 'Idle'}</span>
+      <main className="container mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+          {/* Left Column - Weather and Globe */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* 1. LIVE SENSOR TOGGLE - Compact version */}
+            <div className="glass-card p-3 rounded-xl border-2 border-purple-500 shadow-sm bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wifi className={`w-5 h-5 ${realTimeMode ? 'text-green-500 animate-pulse' : 'text-gray-400'}`} />
+                  <div className="flex flex-col">
+                    <span className="font-bold text-gray-800 text-sm leading-tight">Live Sensors</span>
+                    <span className="text-[9px] text-gray-500">Firebase: {realTimeMode ? 'Active' : 'Idle'}</span>
+                  </div>
+                </div>
+                <button onClick={toggleRealTimeMode} className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-all ${realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                  {realTimeMode ? 'ON' : 'OFF'}
+                </button>
+              </div>
+            </div>
+
+            {/* 2. SOLAR STORM 3D GLOBE - Smaller */}
+            <div className="h-[300px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
+              <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} compact={true} />
+            </div>
+
+            {/* 3. SPACE WEATHER PANEL - Compact */}
+            <SpaceWeatherPanel
+              spaceWeather={spaceWeather}
+              onRefresh={fetchSpaceWeather}
+              onSimulate={simulateStorm}
+              simulationMode={simulationMode}
+              loading={loading}
+              compact={true}
+            />
+          </div>
+
+          {/* Middle Column - Map */}
+          <div className="lg:col-span-2">
+            <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
+              {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
+              <MapComponent
+                center={mapCenter}
+                zoom={12}
+                heatmapData={heatmapData}
+                routes={routes}
+                vehiclePosition={vehiclePosition}
+                startPoint={startPoint}
+                endPoint={endPoint}
+                gpsActive={gpsActive}
+                imuPath={imuPath}
+                driftPath={driftPath}
+                useIMUNavigation={useIMUNavigation}
+                onMapClick={handleMapClick}
+                onBoundsChange={handleBoundsChange}
+                chaosMode={chaosMode}
+                chaosIntensity={chaosIntensity}
+              />
+            </div>
+
+            {/* Status Bar below map */}
+            <div className="mt-4 p-3 bg-white rounded-lg shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {gpsActive ? 'GPS Active' : 'IMU Active'}
+                  </div>
+                  {realTimeMode && <div className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Live Mode</div>}
+                </div>
+                <div className="text-xs text-gray-600">
+                  {vehiclePosition && <span>Position: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* Route Comparison below map */}
+            <div className="mt-4">
+              <RouteComparison
+                routes={routes}
+                currentMode={currentRouteMode}
+                onSelectRoute={toggleSystemMode}
+                compact={true}
+              />
             </div>
           </div>
-          <button onClick={toggleRealTimeMode} className={`px-3 py-1.5 text-xs rounded-lg font-bold transition-all ${ realTimeMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-200 text-gray-600 hover:bg-gray-300' }`}>
-            {realTimeMode ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      </div>
 
-      {/* 2. SOLAR STORM 3D GLOBE - Smaller */}
-      <div className="h-[300px] rounded-xl overflow-hidden shadow-lg border border-gray-200 bg-black relative">
-        <SolarStormGlobe kpIndex={spaceWeather?.kp_index || 2} compact={true} />
-      </div>
-
-      {/* 3. SPACE WEATHER PANEL - Compact */}
-      <SpaceWeatherPanel
-        spaceWeather={spaceWeather}
-        onRefresh={fetchSpaceWeather}
-        onSimulate={simulateStorm}
-        simulationMode={simulationMode}
-        loading={loading}
-        compact={true}
-      />
-    </div>
-
-    {/* Middle Column - Map */}
-    <div className="lg:col-span-2">
-      <div className="h-[600px] rounded-xl overflow-hidden shadow-xl relative">
-        {activePointType === 'selecting' && <div className="absolute inset-0 bg-black/10 z-10 pointer-events-none" />}
-        <MapComponent
-          center={mapCenter}
-          zoom={12}
-          heatmapData={heatmapData}
-          routes={routes}
-          vehiclePosition={vehiclePosition}
-          startPoint={startPoint}
-          endPoint={endPoint}
-          gpsActive={gpsActive}
-          imuPath={imuPath}
-          driftPath={driftPath}
-          useIMUNavigation={useIMUNavigation}
-          onMapClick={handleMapClick}
-          onBoundsChange={handleBoundsChange}
-          chaosMode={chaosMode}
-          chaosIntensity={chaosIntensity}
-        />
-      </div>
-
-      {/* Status Bar below map */}
-      <div className="mt-4 p-3 bg-white rounded-lg shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className={`px-2 py-1 rounded-full text-xs font-medium ${gpsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {gpsActive ? 'GPS Active' : 'IMU Active'}
+          {/* Right Column - Controls */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Control Panel - Full height */}
+            <div className="h-full">
+              <ControlPanel
+                routeMode={currentRouteMode}
+                onRouteModeChange={toggleSystemMode}
+                gpsActive={gpsActive}
+                onGPSFailureToggle={handleGPSFailureToggle}
+                vehicleMoving={vehicleMoving}
+                onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
+                onReset={resetSimulation}
+                onSetPoints={() => setActivePointType('selecting')}
+                onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
+                startPoint={startPoint}
+                endPoint={endPoint}
+                onUseDemoRoute={useDemoRoute}
+                compact={false}
+              />
             </div>
-            {realTimeMode && <div className="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Live Mode</div>}
-          </div>
-          <div className="text-xs text-gray-600">
-            {vehiclePosition && <span>Position: {vehiclePosition[0].toFixed(6)}, {vehiclePosition[1].toFixed(6)}</span>}
-          </div>
-        </div>
-      </div>
 
-      {/* Route Comparison below map */}
-      <div className="mt-4">
-        <RouteComparison
-          routes={routes}
-          currentMode={currentRouteMode}
-          onSelectRoute={toggleSystemMode}
-          compact={true}
-        />
-      </div>
-    </div>
-
-    {/* Right Column - Controls */}
-    <div className="lg:col-span-1 space-y-6">
-      {/* Control Panel - Full height */}
-      <div className="h-full">
-        <ControlPanel
-          routeMode={currentRouteMode}
-          onRouteModeChange={toggleSystemMode}
-          gpsActive={gpsActive}
-          onGPSFailureToggle={handleGPSFailureToggle}
-          vehicleMoving={vehicleMoving}
-          onVehicleMoveToggle={() => setVehicleMoving(!vehicleMoving)}
-          onReset={resetSimulation}
-          onSetPoints={() => setActivePointType('selecting')}
-          onClearPoints={() => { setStartPoint(null); setEndPoint(null); setRoutes({}); setVehiclePosition(null); setDriftPath([]) }}
-          startPoint={startPoint}
-          endPoint={endPoint}
-          onUseDemoRoute={useDemoRoute}
-          compact={false}
-        />
-      </div>
-
-      {/* Additional info/status card */}
-      {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+            {/* Additional info/status card */}
+            {/* <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
         <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           System Status
@@ -698,7 +731,7 @@ if (authChecking) {
         </div>
       </div> */}
 
-      {/* Demo Routes Quick Select
+            {/* Demo Routes Quick Select
       <div className="bg-white rounded-xl p-4 shadow-sm border">
         <h3 className="font-bold text-gray-800 mb-3">Quick Routes</h3>
         <div className="grid grid-cols-2 gap-2">
@@ -728,8 +761,8 @@ if (authChecking) {
           </button>
         </div>
       </div> */}
-    </div>
-  </div>
+          </div>
+        </div>
 
 
 

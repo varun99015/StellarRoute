@@ -8,23 +8,23 @@ import uvicorn
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# Import settings after path is set
+from app.config import settings
+
 if __name__ == "__main__":
-    # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(), logging.FileHandler("stellarroute.log")],
     )
-
     logger = logging.getLogger(__name__)
     logger.info("Starting StellarRoute backend server...")
 
-    # Run FastAPI app
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
+        host=settings.HOST,  # from config
+        port=settings.PORT,  # from config
+        reload=settings.DEBUG,  # from config (optional)
         log_level="info",
         access_log=True,
     )

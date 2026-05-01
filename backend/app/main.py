@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+
 import os
 import random
 import smtplib
@@ -11,6 +12,7 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List
 
 import redis.asyncio as redis
+
 from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
@@ -24,6 +26,9 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
+
+# import centralized settings
+from .config import settings
 
 from .cache.memory_cache import cache
 
@@ -47,11 +52,12 @@ from .services.simulation import StormSimulator
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed")
-ALGORITHM = "HS256"
-SESSION_EXPIRY_SECONDS = 30 * 60  # 30 minutes
+# Now use settings
+SECRET_KEY = settings.SECRET_KEY
+ALGORITHM = settings.ALGORITHM
+SESSION_EXPIRY_SECONDS = settings.SESSION_EXPIRY_SECONDS
+REDIS_URL = settings.REDIS_URL
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -77,7 +83,7 @@ origins = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,  # was hardcoded list
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

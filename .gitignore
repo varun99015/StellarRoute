@@ -63,3 +63,5 @@ override.tf.json
 
 # Lock file (depends, see below)
 .terraform.lock.hcl
+MobileRemote/
+mobilesensorss/
