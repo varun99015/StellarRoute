@@ -4,13 +4,11 @@ import MapComponent from './components/MapComponent'
 import SpaceWeatherPanel from './components/SpaceWeatherPanel'
 import ControlPanel from './components/ControlPanel'
 import RouteComparison from './components/RouteComparison'
-import SolarStormGlobe from './components/SolarStormGlobe' // <--- NEW IMPORT
+import SolarStormGlobe from './components/SolarStormGlobe'
 import { stellarRouteAPI } from './services/api'
 import { GPSSimulator, VehicleAnimator, IMUNavigator } from './utils/simulation'
 import { DEMO_COORDINATES } from './utils/constants'
 import LoginModal from './components/LoginModal';
-import './styles/chaosEffects.css'; // We'll create this file
-import { audioManager } from './utils/audioManager';
 
 
 
@@ -119,38 +117,7 @@ useEffect(() => {
       };
   }
 
-  // --- FIREBASE LISTENER ---
-  useEffect(() => {
-    if (realTimeMode) {
-        console.log("📡 Subscribing to Firebase vehicle_control...");
-        const sensorRef = ref(db, 'vehicle_control');
-        
-        const unsubscribe = onValue(sensorRef, (snapshot) => {
-            const data = snapshot.val();
-            
-            if (data && lastPositionRef.current) {
-                const newPos = calculateNewPosition(
-                    lastPositionRef.current[0],
-                    lastPositionRef.current[1],
-                    data,
-                    lastSensorTime
-                );
-                
-                setLastSensorTime(newPos.timestamp);
-                setVehiclePosition([newPos.lat, newPos.lon]);
-                lastPositionRef.current = [newPos.lat, newPos.lon];
-                
-                setDriftPath(prev => {
-                    const newPath = [...prev, [newPos.lat, newPos.lon]];
-                    if (newPath.length > 500) return newPath.slice(newPath.length - 500);
-                    return newPath;
-                });
-            }
-        });
-        
-        return () => unsubscribe();
-    }
-  }, [realTimeMode, lastSensorTime]);
+
 
   // --- AUTHENTICATION HANDLERS ---
   const handleLoginSuccess = (userDisplayName) => {
