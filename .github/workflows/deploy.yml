@@ -2,7 +2,7 @@ name: Deploy to AWS
 
 on:
   push:
-    branches: [ "Production" ]
+    branches: [ "Production" ]   
 
 jobs:
   deploy:
@@ -35,15 +35,15 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # 1. Pull latest images
+          # 1. Pull the latest images from Docker Hub
           docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
           docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-          # 2. Stop and remove existing containers to avoid conflicts
+          # 2. Stop and remove old containers to prevent port/name conflicts
           docker stop backend frontend redis || true
           docker rm backend frontend redis || true
 
-          # 3. Start containers
+          # 3. Start new containers
           docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
           docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
           docker run -d -p 6379:6379 --name redis redis:alpine
