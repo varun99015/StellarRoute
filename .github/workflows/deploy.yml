@@ -36,16 +36,16 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           # Pull the latest images from Docker Hub
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
+          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
+          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-          # Stop and remove old containers[cite: 1]
-          docker stop backend frontend || true[cite: 1]
-          docker rm backend frontend || true[cite: 1]
+          # Stop and remove old containers
+          docker stop backend frontend || true
+          docker rm backend frontend || true
 
-          # Start new containers with correct image matching[cite: 1]
-          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
+          # Start new containers with correct image matching
+          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
+          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-          # Ensure Redis is running for real-time sync[cite: 1]
-          docker run -d -p 6379:6379 --name redis redis:alpine || true[cite: 1]
+          # Ensure Redis is running for real-time sync
+          docker run -d -p 6379:6379 --name redis redis:alpine || true
