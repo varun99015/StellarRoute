@@ -1,8 +1,6 @@
 export const DEMO_COORDINATES = {
-  SAN_FRANCISCO: [37.7749, -122.4194],
-  OAKLAND: [37.8044, -122.2712],
-  BERKELEY: [37.8716, -122.2727],
-  SAN_JOSE: [37.3382, -121.8863],
+  start: [12.9716, 77.5946], // Bangalore
+  end: [19.0760, 72.8777], // Mumbai
 }
 
 export const SCENARIOS = {

@@ -13,7 +13,7 @@ from typing import Any, Dict, List
 
 import redis.asyncio as redis
 
-# from dotenv import load_dotenv
+from dotenv import load_dotenv
 from fastapi import (
     FastAPI,
     HTTPException,
@@ -83,7 +83,6 @@ origins = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
-    
     allow_origins=settings.CORS_ORIGINS,  # was hardcoded list
     allow_credentials=True,
     allow_methods=["*"],

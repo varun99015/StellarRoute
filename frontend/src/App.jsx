@@ -35,9 +35,9 @@ function App() {
   const [driftPath, setDriftPath] = useState([])
 
   // --- MAP STATE ---
-  const [mapCenter] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
-  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.SAN_FRANCISCO)
-  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.OAKLAND)
+  const [mapCenter] = useState(DEMO_COORDINATES.BENGALURU)
+  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.BENGALURU)
+  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.MUMBAI)
   const [mapBounds, setMapBounds] = useState(null)
 
   // --- SIMULATION STATE ---
@@ -430,15 +430,13 @@ function App() {
     }
   }
 
-  const useDemoRoute = (routeName) => {
-    let start, end
-    switch (routeName) {
-      case 'SF_OAKLAND': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.OAKLAND; break
-      case 'SF_BERKELEY': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.BERKELEY; break
-      case 'SF_SAN_JOSE': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.SAN_JOSE; break
-      default: return
-    }
-    setStartPoint(start); setEndPoint(end); setVehiclePosition(start)
+  const useDemoRoute = () => {
+    const start = DEMO_COORDINATES.start
+    const end = DEMO_COORDINATES.end
+
+    setStartPoint(start)
+    setEndPoint(end)
+    setVehiclePosition(start)
     calculateRoute(start, end, currentRouteMode)
   }
 
@@ -455,8 +453,8 @@ function App() {
   }
 
   return (
-  <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
-    
+    <div className={`relative min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 ${chaosMode ? 'overflow-hidden chaos-mode' : ''}`}>
+
 
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
