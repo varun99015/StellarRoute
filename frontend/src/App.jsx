@@ -12,14 +12,7 @@ import LoginModal from './components/LoginModal';
 import './styles/chaosEffects.css'; // We'll create this file
 import { audioManager } from './utils/audioManager';
 
-// --- FIREBASE IMPORTS ---
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, onValue } from "firebase/database";
-import { firebaseConfig } from './firebaseConfig'; 
 
-// Initialize Firebase
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getDatabase(firebaseApp);
 
 function App() {
   // --- AUTHENTICATION STATE ---
