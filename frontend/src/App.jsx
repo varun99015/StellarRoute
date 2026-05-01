@@ -35,9 +35,9 @@ function App() {
   const [driftPath, setDriftPath] = useState([])
 
   // --- MAP STATE ---
-  const [mapCenter] = useState(DEMO_COORDINATES.start)
-  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.start)
-  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.end)
+  const [mapCenter] = useState(DEMO_COORDINATES.Bengaluru)
+  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.Bengaluru)
+  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.Mumbai)
   const [mapBounds, setMapBounds] = useState(null)
 
   // --- SIMULATION STATE ---
@@ -430,13 +430,15 @@ function App() {
     }
   }
 
-  const useDemoRoute = () => {
-    const start = DEMO_COORDINATES.start
-    const end = DEMO_COORDINATES.end
-
-    setStartPoint(start)
-    setEndPoint(end)
-    setVehiclePosition(start)
+  const useDemoRoute = (routeName) => {
+    let start, end
+    switch (routeName) {
+      case 'Bengaluru_Mumbai': start = DEMO_COORDINATES.Bengaluru; end = DEMO_COORDINATES.Mumbai; break
+      // case 'SF_BERKELEY': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.BERKELEY; break
+      // case 'SF_SAN_JOSE': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.SAN_JOSE; break
+      default: return
+    }
+    setStartPoint(start); setEndPoint(end); setVehiclePosition(start)
     calculateRoute(start, end, currentRouteMode)
   }
 

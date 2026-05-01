@@ -1,6 +1,6 @@
 export const DEMO_COORDINATES = {
-  start: [12.9716, 77.5946], // Bangalore
-  end: [19.0760, 72.8777], // Mumbai
+  Bengaluru: [12.9716, 77.5946], // Bangalore
+  Mumbai: [19.0760, 72.8777], // Mumbai
 }
 
 export const SCENARIOS = {
