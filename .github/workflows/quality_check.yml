@@ -40,11 +40,18 @@ jobs:
   # JOB 2: CHECK BACKEND (Python/Navigation Logic)
   backend-checks:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+          
     defaults:
       run:
         working-directory: ./backend
     env:
       BACKEND_URL: http://localhost:8000
+      REDIS_URL: redis://localhost:6379
 
     steps:
     - name: Checkout Code
@@ -68,14 +75,27 @@ jobs:
     - name: Run Linter
       run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
+    - name: Wait for Redis
+      run: |
+        sleep 3
+
     - name: Start Backend
       run: |
-        nohup python run.py &
-        sleep 7
+        nohup python run.py > backend.log 2>&1 &
 
-    - name: Check Backend Running
+    - name: Wait for Backend
       run: |
-        curl --fail "$BACKEND_URL/api/space-weather/current?latitude=12.97&longitude=77.59"
+        for i in {1..10}; do
+          if curl --fail "$BACKEND_URL/api/space-weather/current?latitude=12.97&longitude=77.59"; then
+            echo "Backend is up"
+            exit 0
+          fi
+          echo "Waiting for backend..."
+          sleep 3
+        done
+        echo "Backend failed to start"
+        cat backend.log
+        exit 1
 
     - name: Run API Tests
       run: pytest tests/
