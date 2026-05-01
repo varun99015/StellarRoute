@@ -1,18 +1,21 @@
-# Use an official Node.js runtime
-FROM node:22-alpine
-
-# Set the working directory
+FROM node:22-alpine as build
 WORKDIR /app
 
-# Copy package files and install dependencies
 COPY package*.json ./
 RUN npm install
 
-# Copy the rest of the frontend source code
+
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
+# ---------------------------------
+
 COPY . .
 
-# Expose the port Vite runs on
-EXPOSE 3000
 
-# Start the Vite development server, exposing it to the Docker network
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+RUN npm run build
+
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

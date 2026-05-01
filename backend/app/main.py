@@ -72,12 +72,12 @@ REDIS_URL = settings.REDIS_URL
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
-# Email config from settings
-SMTP_SERVER = settings.SMTP_SERVER
-SMTP_PORT = settings.SMTP_PORT
-EMAIL_ADDRESS = settings.EMAIL_ADDRESS
-EMAIL_PASSWORD = settings.EMAIL_PASSWORD
+SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 active_connections: List[WebSocket] = []
 
 logging.basicConfig(
@@ -91,21 +91,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# code before refactor
-
-# origins = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     "http://localhost:5173",
-#     "http://127.0.0.1:5173",
-# ]
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=origins,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
+origins = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
@@ -256,6 +242,7 @@ async def verify_otp_and_login(request_body: OtpVerification, response: Response
         key="session_id",
         value=session_token,
         httponly=True,
+        secure=True,
         max_age=SESSION_EXPIRY_SECONDS,
         samesite="Lax",
     )

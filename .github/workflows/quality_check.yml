@@ -2,9 +2,9 @@ name: Code Quality Checks
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "Production" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "Production" ]
 
 jobs:
   # JOB 1: CHECK FRONTEND (React/Vite)
@@ -30,7 +30,7 @@ jobs:
       run: npm install
 
     - name: Security Audit
-      # Fails the build if "High" or "Critical" vulnerabilities (like the Axios/Minimatch ones) are found
+      # Fails the build if "High" or "Critical" vulnerabilities are found
       run: npm audit --audit-level=high
 
     - name: Run Linter

@@ -28,12 +28,13 @@ services:
       - redis
     restart: unless-stopped
 
-  # 3. The React Frontend
+
+# 3. The React Frontend
   frontend:
     build: ./frontend
     container_name: stellar-frontend
     ports:
-      - "3000:3000"
+      - "3000:80"   
     environment:
       - VITE_API_URL=http://localhost:8000
     depends_on:
