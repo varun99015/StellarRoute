@@ -35,9 +35,9 @@ function App() {
   const [driftPath, setDriftPath] = useState([])
 
   // --- MAP STATE ---
-  const [mapCenter] = useState(DEMO_COORDINATES.BENGALURU)
-  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.BENGALURU)
-  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.MUMBAI)
+  const [mapCenter] = useState(DEMO_COORDINATES.start)
+  const [startPoint, setStartPoint] = useState(DEMO_COORDINATES.start)
+  const [endPoint, setEndPoint] = useState(DEMO_COORDINATES.end)
   const [mapBounds, setMapBounds] = useState(null)
 
   // --- SIMULATION STATE ---
