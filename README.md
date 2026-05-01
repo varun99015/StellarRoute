@@ -2,9 +2,7 @@
 
 **Navigation that survives solar storms.** StellarRoute predicts GPS degradation from solar activity and provides continuous navigation through intelligent rerouting and sensor-fusion fallback.
 
-[![Live Demo](https://img.shields.io/badge/demo-live-green)](http://your-demo-link.com)
-[![Backend API](https://img.shields.io/badge/API-online-brightgreen)](http://localhost:8000/docs)
-[![Frontend](https://img.shields.io/badge/frontend-react-blue)](http://localhost:3000)
+[![Live Demo](https://img.shields.io/badge/demo-live-green)](https://stellar-route.me)
 
 ## 🎯 The Problem
 **Solar storms disrupt GPS signals**, causing navigation failures in:
