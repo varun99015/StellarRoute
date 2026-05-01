@@ -20,13 +20,13 @@ jobs:
 
     - name: Build & Push Backend
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellar-backend ./backend
-        docker push ${{ secrets.DOCKER_USERNAME }}/stellar-backend
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest ./backend
+        docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
 
     - name: Build & Push Frontend
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellar-frontend ./frontend
-        docker push ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
+        docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
@@ -35,16 +35,17 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellar-backend
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
+          # Pull the latest images from Docker Hub
+          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
+          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
 
-          docker stop backend || true
-          docker stop frontend || true
+          # Stop and remove old containers[cite: 1]
+          docker stop backend frontend || true[cite: 1]
+          docker rm backend frontend || true[cite: 1]
 
-          docker rm backend || true
-          docker rm frontend || true
+          # Start new containers with correct image matching[cite: 1]
+          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
+          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
 
-          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellar-backend
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
-
-          docker run -d -p 6379:6379 --name redis redis || true
+          # Ensure Redis is running for real-time sync[cite: 1]
+          docker run -d -p 6379:6379 --name redis redis:alpine || true[cite: 1]
