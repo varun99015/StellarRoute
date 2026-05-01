@@ -21,21 +21,21 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22' # Upgraded to support Vite 7
+        node-version: '22'
         cache: 'npm'
         cache-dependency-path: frontend/package-lock.json
 
     - name: Install Dependencies
-      # Using install because of the local package-lock sync issues we encountered
       run: npm install
 
     - name: Security Audit
-      # Fails the build if "High" or "Critical" vulnerabilities are found
       run: npm audit --audit-level=high
 
     - name: Run Linter
-      # npx ensures the local eslint binary is used even if not in the runner's path
       run: npx eslint .
+
+    - name: Build Check
+      run: npm run build
 
   # JOB 2: CHECK BACKEND (Python/Navigation Logic)
   backend-checks:
@@ -43,6 +43,8 @@ jobs:
     defaults:
       run:
         working-directory: ./backend
+    env:
+      BACKEND_URL: http://localhost:8000
 
     steps:
     - name: Checkout Code
@@ -57,12 +59,23 @@ jobs:
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 black
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install -r requirements.txt
+        pip install flake8 black pytest requests
 
-    - name: Run Formatter Check (Black)
+    - name: Run Formatter Check
       run: black --check .
 
-    - name: Run Linter (Flake8)
-      # Specifically catches logic-breaking syntax errors
+    - name: Run Linter
       run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+    - name: Start Backend
+      run: |
+        nohup python run.py &
+        sleep 7
+
+    - name: Check Backend Running
+      run: |
+        curl --fail "$BACKEND_URL/api/space-weather/current?latitude=12.97&longitude=77.59"
+
+    - name: Run API Tests
+      run: pytest tests/
