@@ -1,6 +1,12 @@
 export const DEMO_COORDINATES = {
   Bengaluru: [12.9716, 77.5946], // Bangalore
   Mumbai: [19.0760, 72.8777], // Mumbai
+  GOA: [15.2993, 74.1240],
+  KARWAR: [14.8000, 74.1333],
+  SHIVAMOGGA: [13.9299, 75.5681],
+  CHIKKABALLAPUR: [13.4350, 77.7315],
+  MANGALURU: [12.9141, 74.8560],
+  HYDERABAD: [17.3850, 78.4867],
 }
 
 export const SCENARIOS = {

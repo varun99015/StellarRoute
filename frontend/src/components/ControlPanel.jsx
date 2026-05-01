@@ -204,29 +204,53 @@ const ControlPanel = ({
         </div>
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => onUseDemoRoute('Bengaluru_Mumbai')}
+            onClick={() => onUseDemoRoute('BLR_MUMBAI')}
             className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
           >
             Bengaluru → Mumbai
           </button>
-          {/* <button
-            onClick={() => onUseDemoRoute('SF_OAKLAND')}
+
+          <button
+            onClick={() => onUseDemoRoute('BLR_GOA')}
             className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
           >
-            SF → Oakland
+            Bengaluru → Goa
           </button>
+
           <button
-            onClick={() => onUseDemoRoute('SF_BERKELEY')}
+            onClick={() => onUseDemoRoute('BLR_MANGALURU')}
             className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
           >
-            SF → Berkeley
+            Bengaluru → Mangaluru
           </button>
+
           <button
-            onClick={() => onUseDemoRoute('SF_SAN_JOSE')}
+            onClick={() => onUseDemoRoute('BLR_HYDERABAD')}
+            className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
+          >
+            Bengaluru → Hyderabad
+          </button>
+
+          <button
+            onClick={() => onUseDemoRoute('BLR_SHIVAMOGGA')}
+            className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
+          >
+            Bengaluru → Shivamogga
+          </button>
+
+          <button
+            onClick={() => onUseDemoRoute('BLR_KARWAR')}
+            className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200"
+          >
+            Bengaluru → Karwar
+          </button>
+
+          <button
+            onClick={() => onUseDemoRoute('BLR_CHIKKABALLAPUR')}
             className="py-2 px-3 text-xs bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg transition-all border border-gray-200 col-span-2"
           >
-            SF → San Jose
-          </button> */}
+            Bengaluru → Chikkaballapur
+          </button>
         </div>
         <div className="text-xs text-gray-500 mt-2">
           Click "Set Points" to create custom routes

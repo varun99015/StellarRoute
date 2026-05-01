@@ -433,10 +433,43 @@ function App() {
   const useDemoRoute = (routeName) => {
     let start, end
     switch (routeName) {
-      case 'Bengaluru_Mumbai': start = DEMO_COORDINATES.Bengaluru; end = DEMO_COORDINATES.Mumbai; break
-      // case 'SF_BERKELEY': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.BERKELEY; break
-      // case 'SF_SAN_JOSE': start = DEMO_COORDINATES.SAN_FRANCISCO; end = DEMO_COORDINATES.SAN_JOSE; break
-      default: return
+      case 'BLR_MUMBAI':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.MUMBAI
+        break
+
+      case 'BLR_GOA':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.GOA
+        break
+
+      case 'BLR_MANGALURU':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.MANGALURU
+        break
+
+      case 'BLR_SHIVAMOGGA':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.SHIVAMOGGA
+        break
+
+      case 'BLR_KARWAR':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.KARWAR
+        break
+
+      case 'BLR_CHIKKABALLAPUR':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.CHIKKABALLAPUR
+        break
+
+      case 'BLR_HYDERABAD':
+        start = DEMO_COORDINATES.BENGALURU
+        end = DEMO_COORDINATES.HYDERABAD
+        break
+
+      default:
+        return
     }
     setStartPoint(start); setEndPoint(end); setVehiclePosition(start)
     calculateRoute(start, end, currentRouteMode)
