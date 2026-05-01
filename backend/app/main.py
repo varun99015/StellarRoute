@@ -50,19 +50,7 @@ from .services.simulation import StormSimulator
 
 # --- CONFIGURATION ---
 
-# load_dotenv()
-
-# SECRET_KEY = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed")
-# ALGORITHM = "HS256"
-# SESSION_EXPIRY_SECONDS = 30 * 60  # 30 minutes
-
-# REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-# redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-
-# SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-# SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-# EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-# EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+load_dotenv()
 
 # Now use settings
 SECRET_KEY = settings.SECRET_KEY
@@ -95,6 +83,7 @@ origins = [FRONTEND_URL]
 
 app.add_middleware(
     CORSMiddleware,
+    
     allow_origins=settings.CORS_ORIGINS,  # was hardcoded list
     allow_credentials=True,
     allow_methods=["*"],
