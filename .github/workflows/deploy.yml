@@ -45,7 +45,7 @@ jobs:
 
           # Start new containers with correct image matching
           docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
+          docker run -d -p 80:80 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
           # Ensure Redis is running for real-time sync
           docker run -d -p 6379:6379 --name redis redis:alpine || true
