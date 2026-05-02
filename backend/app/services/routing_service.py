@@ -4,7 +4,8 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
-import requests
+# import requests
+import httpx
 
 from ..models import RiskLevel, RouteRequest
 from ..utils.geo_utils import haversine_distance
@@ -12,32 +13,54 @@ from .risk_service import RiskAssessmentService
 
 logger = logging.getLogger(__name__)
 
-
 class RoadNetworkRouter:
     def __init__(self):
         self.risk_service = RiskAssessmentService()
         self.osrm_base_url = "http://router.project-osrm.org/route/v1/driving"
 
-    def get_osrm_route(
+    # def get_osrm_route(
+    #     self, start: Tuple[float, float], end: Tuple[float, float]
+    # ) -> Optional[List[List[float]]]:
+    #     """Fetch real road geometry from OSRM public API"""
+    #     try:
+    #         # OSRM expects {lon},{lat}
+    #         url = f"{self.osrm_base_url}/{start[1]},{start[0]};{end[1]},{end[0]}"
+    #         params = {"overview": "full", "geometries": "geojson"}
+
+    #         response = requests.get(url, params=params, timeout=5.0)
+    #         if response.status_code == 200:
+    #             data = response.json()
+    #             if data["code"] == "Ok" and len(data["routes"]) > 0:
+    #                 # OSRM returns [lon, lat], we need [lat, lon]
+    #                 coordinates = data["routes"][0]["geometry"]["coordinates"]
+    #                 return [[lat, lon] for lon, lat in coordinates]
+    #         return None
+    #     except Exception as e:
+    #         logger.error(f"OSRM Fetch Error: {e}")
+    #         return None
+       
+    async def get_osrm_route(
         self, start: Tuple[float, float], end: Tuple[float, float]
     ) -> Optional[List[List[float]]]:
-        """Fetch real road geometry from OSRM public API"""
+        """Fetch real road geometry from OSRM public API (async)"""
         try:
-            # OSRM expects {lon},{lat}
             url = f"{self.osrm_base_url}/{start[1]},{start[0]};{end[1]},{end[0]}"
             params = {"overview": "full", "geometries": "geojson"}
 
-            response = requests.get(url, params=params, timeout=5.0)
-            if response.status_code == 200:
-                data = response.json()
-                if data["code"] == "Ok" and len(data["routes"]) > 0:
-                    # OSRM returns [lon, lat], we need [lat, lon]
-                    coordinates = data["routes"][0]["geometry"]["coordinates"]
-                    return [[lat, lon] for lon, lat in coordinates]
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, params=params)
+                if response.status_code == 200:
+                    data = response.json()
+                    if data["code"] == "Ok" and len(data["routes"]) > 0:
+                        coordinates = data["routes"][0]["geometry"]["coordinates"]
+                        return [[lat, lon] for lon, lat in coordinates]
+            return None
+        except httpx.TimeoutException:
+            logger.error("OSRM request timed out")
             return None
         except Exception as e:
             logger.error(f"OSRM Fetch Error: {e}")
-            return None
+            return None  
 
     def calculate_route_metrics(
         self, path: List[List[float]], kp_index: float, scenario: str
@@ -157,12 +180,12 @@ class RoadNetworkRouter:
 
         return drifted_path
 
-    def find_routes(
+    async def find_routes(
         self, request: RouteRequest, kp_index: float = 2.0, scenario: str = "normal"
     ) -> Dict[str, Any]:
         """Get Real Road Route, analyze risk, and generate simulations"""
 
-        road_path = self.get_osrm_route(request.start, request.end)
+        road_path = await self.get_osrm_route(request.start, request.end)
         routes = {}
 
         if road_path:
