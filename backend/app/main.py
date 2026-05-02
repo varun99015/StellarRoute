@@ -30,7 +30,8 @@ from pydantic import BaseModel, EmailStr
 # import centralized settings
 from .config import settings
 
-from .cache.memory_cache import cache
+# from .cache.memory_cache import cache
+from .utils.redis_cache import RedisCache
 
 # Assuming these modules exist in your project structure
 from .models import (
@@ -59,6 +60,8 @@ SESSION_EXPIRY_SECONDS = settings.SESSION_EXPIRY_SECONDS
 REDIS_URL = settings.REDIS_URL
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+cache = RedisCache(redis_client)
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
