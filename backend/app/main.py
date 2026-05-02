@@ -208,7 +208,7 @@ def create_session_jwt(email: str) -> str:
 
 
 @app.post(
-    "/auth/request-otp",
+    "/api/auth/request-otp",
     status_code=status.HTTP_202_ACCEPTED,
     tags=["Authentication"],
 )
@@ -222,7 +222,7 @@ async def request_otp(request: EmailRequest):
     return {"message": "OTP sent successfully."}
 
 
-@app.post("/auth/verify-otp", tags=["Authentication"])
+@app.post("/api/auth/verify-otp", tags=["Authentication"])
 async def verify_otp_and_login(request_body: OtpVerification, response: Response):
     stored_otp = await redis_client.get(f"otp:{request_body.email}")
     if not stored_otp or request_body.otp != stored_otp:
@@ -241,7 +241,7 @@ async def verify_otp_and_login(request_body: OtpVerification, response: Response
     return {"message": "Login successful.", "user_email": request_body.email}
 
 
-@app.get("/auth/status", tags=["Authentication"])
+@app.get("/api/auth/status", tags=["Authentication"])
 async def check_auth_status(request: Request):
     token = request.cookies.get("session_id")
     if not token:
@@ -255,7 +255,7 @@ async def check_auth_status(request: Request):
         raise HTTPException(status_code=401, detail="Session expired")
 
 
-@app.post("/auth/logout", tags=["Authentication"])
+@app.post("/api/auth/logout", tags=["Authentication"])
 async def logout(response: Response):
     response.delete_cookie(key="session_id")
     return {"message": "Logout successful"}
@@ -269,7 +269,7 @@ async def root():
     return {"message": "StellarRoute API v2.0", "status": "operational"}
 
 
-@app.get("/space-weather/current", response_model=SpaceWeatherData)
+@app.get("/api/space-weather/current", response_model=SpaceWeatherData)
 async def get_current_space_weather(
     request: Request, latitude: float = 37.7749, longitude: float = -122.4194
 ):
@@ -302,8 +302,7 @@ async def get_current_space_weather(
             "normal",
         )
 
-
-@app.get("/space-weather/simulate")
+@app.get("/api/space-weather/simulate")
 async def simulate_storm(
     request: Request, scenario: str, latitude: float, longitude: float
 ):
@@ -327,8 +326,7 @@ async def simulate_storm(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.get("/space-weather/stop-simulation")
+@app.get("/api/space-weather/stop-simulation")
 async def stop_simulation(request: Request):
     client_id = get_client_id(request)
     await set_simulation_state(
@@ -343,8 +341,7 @@ async def stop_simulation(request: Request):
     )
     return {"message": "Simulation stopped for user", "status": "returned_to_real_data"}
 
-
-@app.get("/space-weather/timeline")
+@app.get("/api/space-weather/timeline")
 async def get_storm_timeline(scenario: str = "severe"):
     try:
         scenario_enum = SimulationScenario(scenario)
@@ -356,7 +353,7 @@ async def get_storm_timeline(scenario: str = "severe"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/heatmap")
+@app.post("/api/heatmap")
 async def get_heatmap(heatmap_request: HeatmapRequest, request: Request):
     try:
         client_id = get_client_id(request)
@@ -375,7 +372,7 @@ async def get_heatmap(heatmap_request: HeatmapRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/route")
+@app.post("/api/route")
 async def calculate_route(route_request: RouteRequest, request: Request):
     try:
         client_id = get_client_id(request)
@@ -394,9 +391,8 @@ async def calculate_route(route_request: RouteRequest, request: Request):
         return routes
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/imu/path")
+    
+@app.post("/api/imu/path")
 async def calculate_imu_path(imu_request: IMUPathRequest, request: Request):
     try:
         client_id = get_client_id(request)
@@ -420,7 +416,7 @@ async def calculate_imu_path(imu_request: IMUPathRequest, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/simulation/gps-failure")
+@app.post("/api/simulation/gps-failure")
 async def simulate_gps_failure(simulation: GPSFailureSimulation):
     try:
         result = storm_simulator.simulate_gps_failure(simulation)
@@ -433,7 +429,7 @@ async def simulate_gps_failure(simulation: GPSFailureSimulation):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/health", response_model=HealthResponse, tags=["Health"])
+@app.get("/api/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
     try:
         cache_status = await cache.ping()
@@ -461,7 +457,7 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Service unavailable")
 
 
-@app.get("/status")
+@app.get("/api/status")
 async def get_system_status(request: Request):
     client_id = get_client_id(request)
     sim_state = await get_simulation_state(client_id)
