@@ -33,7 +33,7 @@ services:
       args:
         # Locally, point to your backend container or localhost
         - VITE_API_URL=http://localhost:8000
-    container_name: stellar-frontend
+    container_name: frontend
     ports:
       - "5173:80"
     depends_on:
