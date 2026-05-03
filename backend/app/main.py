@@ -49,6 +49,10 @@ from .services.risk_service import RiskAssessmentService
 from .services.routing_service import RoadNetworkRouter
 from .services.simulation import StormSimulator
 
+from prometheus_client import Counter, Histogram, generate_latest
+from fastapi.responses import Response as FastAPIResponse
+import time as time_module
+
 # --- CONFIGURATION ---
 
 load_dotenv()
@@ -82,6 +86,23 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"]
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["method", "endpoint"]
+)
+ERROR_COUNT = Counter(
+    "http_errors_total",
+    "Total HTTP errors (5xx)",
+    ["method", "endpoint"]
+)
+
 origins = [FRONTEND_URL]
 
 app.add_middleware(
@@ -91,6 +112,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start_time = time_module.time()
+    response = await call_next(request)
+    elapsed = time_module.time() - start_time
+
+    endpoint = request.url.path
+
+    REQUEST_COUNT.labels(
+        method=request.method,
+        endpoint=endpoint,
+        status=response.status_code
+    ).inc()
+
+    REQUEST_LATENCY.labels(
+        method=request.method,
+        endpoint=endpoint
+    ).observe(elapsed)
+
+    if response.status_code >= 500:
+        ERROR_COUNT.labels(
+            method=request.method,
+            endpoint=endpoint
+        ).inc()
+
+    return response
 
 noaa_service = NOAAWeatherService()
 risk_service = RiskAssessmentService()
@@ -529,6 +577,9 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in active_connections:
             active_connections.remove(websocket)
 
+@app.get("/metrics")
+async def metrics():
+    return FastAPIResponse(content=generate_latest(), media_type="text/plain")
 
 # --- STARTUP / SHUTDOWN ---
 
