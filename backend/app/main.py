@@ -302,6 +302,7 @@ async def get_current_space_weather(
             "normal",
         )
 
+
 @app.get("/api/space-weather/simulate")
 async def simulate_storm(
     request: Request, scenario: str, latitude: float, longitude: float
@@ -326,6 +327,7 @@ async def simulate_storm(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/space-weather/stop-simulation")
 async def stop_simulation(request: Request):
     client_id = get_client_id(request)
@@ -340,6 +342,7 @@ async def stop_simulation(request: Request):
         },
     )
     return {"message": "Simulation stopped for user", "status": "returned_to_real_data"}
+
 
 @app.get("/api/space-weather/timeline")
 async def get_storm_timeline(scenario: str = "severe"):
@@ -391,7 +394,8 @@ async def calculate_route(route_request: RouteRequest, request: Request):
         return routes
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
 @app.post("/api/imu/path")
 async def calculate_imu_path(imu_request: IMUPathRequest, request: Request):
     try:

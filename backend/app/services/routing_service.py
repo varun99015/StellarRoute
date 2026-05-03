@@ -4,6 +4,7 @@ import random
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+
 # import requests
 import httpx
 
@@ -12,6 +13,7 @@ from ..utils.geo_utils import haversine_distance
 from .risk_service import RiskAssessmentService
 
 logger = logging.getLogger(__name__)
+
 
 class RoadNetworkRouter:
     def __init__(self):
@@ -38,7 +40,7 @@ class RoadNetworkRouter:
     #     except Exception as e:
     #         logger.error(f"OSRM Fetch Error: {e}")
     #         return None
-       
+
     async def get_osrm_route(
         self, start: Tuple[float, float], end: Tuple[float, float]
     ) -> Optional[List[List[float]]]:
@@ -60,7 +62,7 @@ class RoadNetworkRouter:
             return None
         except Exception as e:
             logger.error(f"OSRM Fetch Error: {e}")
-            return None  
+            return None
 
     def calculate_route_metrics(
         self, path: List[List[float]], kp_index: float, scenario: str

@@ -29,9 +29,7 @@ class RedisCache:
 
     async def set(self, key: str, value: Any, ttl: int = 300):
         try:
-            await self.redis.setex(
-                key, ttl, json.dumps(value, default=str)
-            )
+            await self.redis.setex(key, ttl, json.dumps(value, default=str))
         except Exception as e:
             logger.error(f"Redis cache set error for key '{key}': {e}")
 
