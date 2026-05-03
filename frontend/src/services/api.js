@@ -1,6 +1,5 @@
 // frontend/src/services/api.js
 import axios from 'axios'
-// --- CONFIGURATION UPDATE (CRUCIAL FOR SESSION AUTH) ---
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL);
 
