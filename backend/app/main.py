@@ -30,8 +30,7 @@ from pydantic import BaseModel, EmailStr
 # import centralized settings
 from .config import settings
 
-# from .cache.memory_cache import cache
-from .utils.redis_cache import RedisCache
+from .cache.memory_cache import cache
 
 # Assuming these modules exist in your project structure
 from .models import (
@@ -60,8 +59,6 @@ SESSION_EXPIRY_SECONDS = settings.SESSION_EXPIRY_SECONDS
 REDIS_URL = settings.REDIS_URL
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-
-cache = RedisCache(redis_client)
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
@@ -389,7 +386,7 @@ async def calculate_route(route_request: RouteRequest, request: Request):
         if cached:
             return cached
 
-        routes = await router.find_routes(route_request, kp_index, scenario)
+        routes = router.find_routes(route_request, kp_index, scenario)
         await cache.set(cache_key, routes, ttl=300)
         return routes
     except Exception as e:
@@ -407,7 +404,7 @@ async def calculate_imu_path(imu_request: IMUPathRequest, request: Request):
         sim_state = await get_simulation_state(client_id)
         scenario = "simulation" if sim_state["active"] else "normal"
 
-        routes = await router.find_routes(route_request, kp_index, scenario)
+        routes = router.find_routes(route_request, kp_index, scenario)
         imu_path = routes.get("alternatives", {}).get("imu", {})
 
         return {
