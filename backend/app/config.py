@@ -5,7 +5,6 @@ from typing import List
 
 load_dotenv()
 
-
 class Settings:
     # Application
     APP_NAME: str = "StellarRoute API"
@@ -26,9 +25,7 @@ class Settings:
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379")
 
     # JWT / Auth
-    SECRET_KEY: str = os.getenv(
-        "SECRET_KEY", "a-default-secret-key-that-must-be-changed"
-    )
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "a-default-secret-key-that-must-be-changed")
     ALGORITHM: str = "HS256"
     SESSION_EXPIRY_SECONDS: int = 30 * 60  # 30 minutes
 
@@ -42,5 +39,8 @@ class Settings:
     NOAA_BASE_URL: str = os.getenv("NOAA_BASE_URL", "https://services.swpc.noaa.gov")
     NOAA_TIMEOUT: float = 10.0
 
-
 settings = Settings()
+
+# Security validation – must be done after settings is instantiated
+if settings.SECRET_KEY == "a-default-secret-key-that-must-be-changed" or len(settings.SECRET_KEY) < 16:
+    raise ValueError("SECRET_KEY is insecure! Set a strong secret in the environment.")

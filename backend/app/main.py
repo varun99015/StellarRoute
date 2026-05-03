@@ -213,6 +213,19 @@ def create_session_jwt(email: str) -> str:
     tags=["Authentication"],
 )
 async def request_otp(request: EmailRequest):
+    # --- Rate limit: 5 requests per minute per email ---
+    rate_key = f"rate:otp:{request.email}"
+    current = await redis_client.incr(rate_key)
+    if current == 1:
+        await redis_client.expire(rate_key, 60)
+    if current > 5:
+        logger.warning(f"OTP rate limit exceeded for {request.email}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many OTP requests. Please wait a minute and try again.",
+        )
+    # --- end rate limit ---
+
     otp_code = generate_otp()
     if not send_email_otp(request.email, otp_code):
         raise HTTPException(
