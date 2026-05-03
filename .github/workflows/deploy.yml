@@ -35,22 +35,6 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-<<<<<<< HEAD
-          # Pull the latest images from Docker Hub
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
-
-          # Stop and remove old containers[cite: 1]
-          docker stop backend frontend || true[cite: 1]
-          docker rm backend frontend || true[cite: 1]
-
-          # Start new containers with correct image matching[cite: 1]
-          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest[cite: 1]
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest[cite: 1]
-
-          # Ensure Redis is running for real-time sync[cite: 1]
-          docker run -d -p 6379:6379 --name redis redis:alpine || true[cite: 1]
-=======
           cd ~/stellarroute
           # Pull the latest images we just pushed to Docker Hub
           docker compose pull
@@ -58,4 +42,3 @@ jobs:
           # Restart the services using the compose file
           # --remove-orphans cleans up any old manual 'docker run' containers
           docker compose up -d --remove-orphans
->>>>>>> 0b242838d2e60809a2f0e23d5c53fbaf2a3df6dd
