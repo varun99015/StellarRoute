@@ -2,7 +2,7 @@ name: Deploy to AWS
 
 on:
   push:
-    branches: [ "Production" ]   # ✅ ONLY deploy from Production
+    branches: [ "Production" ]   
 
 jobs:
   deploy:
@@ -20,13 +20,15 @@ jobs:
 
     - name: Build & Push Backend
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellar-backend ./backend
-        docker push ${{ secrets.DOCKER_USERNAME }}/stellar-backend
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest ./backend
+        docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
 
     - name: Build & Push Frontend
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellar-frontend ./frontend
-        docker push ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
+        docker build \
+          --build-arg VITE_API_URL="https://stellar-route.me/api" \
+          -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
+        docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
@@ -35,16 +37,10 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellar-backend
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
-
-          docker stop backend || true
-          docker stop frontend || true
-
-          docker rm backend || true
-          docker rm frontend || true
-
-          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellar-backend
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellar-frontend
-
-          docker run -d -p 6379:6379 --name redis redis || true
+          cd ~/stellarroute
+          # Pull the latest images we just pushed to Docker Hub
+          docker compose pull
+          
+          # Restart the services using the compose file
+          # --remove-orphans cleans up any old manual 'docker run' containers
+          docker compose up -d --remove-orphans
