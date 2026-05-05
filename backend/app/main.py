@@ -451,10 +451,20 @@ async def imu_socket(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
 
-            # Forward to map clients
+            # Forward to map clients safely
             if client_id in map_connections:
+                dead_conns = []
                 for conn in map_connections[client_id]:
-                    await conn.send_text(data)
+                    try:
+                        await conn.send_text(data)
+                    except Exception:
+                        # If the connection closed while sending, mark it as dead
+                        dead_conns.append(conn)
+
+                # Clean up any disconnected clients so they don't crash the loop
+                for dead in dead_conns:
+                    if dead in map_connections[client_id]:
+                        map_connections[client_id].remove(dead)
 
     except WebSocketDisconnect:
         imu_connections.pop(client_id, None)

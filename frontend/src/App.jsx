@@ -132,13 +132,7 @@ function App() {
     imuWs.onopen = () => console.log("IMU WS connected");
 
     mapWs.onclose = () => {
-      console.log("Map WS disconnected");
-      setTimeout(() => {
-        if (realTimeMode) {
-          setRealTimeMode(false);
-          setTimeout(() => setRealTimeMode(true), 500);
-        }
-      }, 1000);
+      console.log("Map WS disconnected safely.");
     };
 
     return () => {
@@ -160,9 +154,20 @@ function App() {
 
       // Start reading orientation
       window.addEventListener("deviceorientation", e => {
-        const h = Math.round(e.alpha || 0);
-        headingRef.current = h;
-        setDeviceHeading(h);
+        let correctedHeading;
+
+        // iOS provides an absolute compass heading (already clockwise)
+        if (e.webkitCompassHeading !== undefined) {
+          correctedHeading = Math.round(e.webkitCompassHeading);
+        } else {
+          // Standard alpha is counter-clockwise. 
+          // We subtract from 360 to make it clockwise for the map math.
+          let rawAlpha = e.alpha || 0;
+          correctedHeading = Math.round(360 - rawAlpha) % 360;
+        }
+
+        headingRef.current = correctedHeading;
+        setDeviceHeading(correctedHeading);
       });
     } catch (err) {
       console.error("Sensor permission error:", err);
