@@ -118,12 +118,18 @@ function App() {
     const imuWs = new WebSocket(`${wsBaseUrl}/ws/imu?client_id=${userId}`);
 
     const sensorInterval = setInterval(() => {
-      // --- APPLY FRICTION ---
-      // Reduce speed by 5% every 200ms so it naturally slows down
+      // --- APPLY FRICTION (Upgraded) ---
       if (manualSpeedRef.current > 0) {
-        manualSpeedRef.current *= 0.95;
-        // Snap to 0 if it gets too slow
-        if (manualSpeedRef.current < 0.5) manualSpeedRef.current = 0;
+        // 1. Multiplicative decay (slows down fast when going fast)
+        manualSpeedRef.current *= 0.90;
+
+        // 2. Linear drag (forces a complete stop when going slow)
+        manualSpeedRef.current -= 1.0;
+
+        // 3. Snap to 0 aggressively if it drops below 2%
+        if (manualSpeedRef.current < 2.0) {
+          manualSpeedRef.current = 0;
+        }
       }
 
       // Sync the physical math to the React UI State
@@ -186,11 +192,11 @@ function App() {
         // Calculate the total physical force applied to the phone
         let magnitude = Math.sqrt(accX * accX + accY * accY + accZ * accZ);
 
-        // Deadzone: Ignore tiny hand jitters (values under 0.8)
-        if (magnitude > 0.8) {
+        // Deadzone: Ignore tiny hand jitters (values under 1.0)
+        if (magnitude > 1.0) {
           // Add the physical acceleration to our current speed
-          let newSpeed = manualSpeedRef.current + (magnitude * 2.5); // Multiplier for feel
-          manualSpeedRef.current = Math.min(100, newSpeed); // Cap max speed at 100
+          let newSpeed = manualSpeedRef.current + (magnitude * 0.6); // Multiplier for feel
+          manualSpeedRef.current = Math.min(40, newSpeed); // Cap max speed at 40
         }
       });
 
@@ -201,7 +207,7 @@ function App() {
   };
 
   const handleSpeedChange = (delta) => {
-    const newSpeed = Math.max(0, Math.min(100, manualSpeedRef.current + delta));
+    const newSpeed = Math.max(0, Math.min(40, manualSpeedRef.current + delta));
     manualSpeedRef.current = newSpeed;
     setManualSpeed(newSpeed);
   };
