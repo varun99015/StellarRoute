@@ -118,6 +118,18 @@ function App() {
     const imuWs = new WebSocket(`${wsBaseUrl}/ws/imu?client_id=${userId}`);
 
     const sensorInterval = setInterval(() => {
+      // --- APPLY FRICTION ---
+      // Reduce speed by 5% every 200ms so it naturally slows down
+      if (manualSpeedRef.current > 0) {
+        manualSpeedRef.current *= 0.95;
+        // Snap to 0 if it gets too slow
+        if (manualSpeedRef.current < 0.5) manualSpeedRef.current = 0;
+      }
+
+      // Sync the physical math to the React UI State
+      setManualSpeed(Math.round(manualSpeedRef.current));
+
+      // Broadcast to map
       if (imuWs.readyState === WebSocket.OPEN) {
         imuWs.send(JSON.stringify({
           type: "imu_update",
@@ -152,23 +164,36 @@ function App() {
       }
       setImuEnabled(true);
 
-      // Start reading orientation
+      // 1. Start reading orientation (Compass)
       window.addEventListener("deviceorientation", e => {
         let correctedHeading;
-
-        // iOS provides an absolute compass heading (already clockwise)
         if (e.webkitCompassHeading !== undefined) {
           correctedHeading = Math.round(e.webkitCompassHeading);
         } else {
-          // Standard alpha is counter-clockwise. 
-          // We subtract from 360 to make it clockwise for the map math.
-          let rawAlpha = e.alpha || 0;
-          correctedHeading = Math.round(360 - rawAlpha) % 360;
+          correctedHeading = Math.round(360 - (e.alpha || 0)) % 360;
         }
-
         headingRef.current = correctedHeading;
         setDeviceHeading(correctedHeading);
       });
+
+      // 2. Start reading motion (Accelerometer -> Speed)
+      window.addEventListener("devicemotion", e => {
+        // Get linear acceleration (excluding gravity)
+        let accX = e.acceleration?.x || 0;
+        let accY = e.acceleration?.y || 0;
+        let accZ = e.acceleration?.z || 0;
+
+        // Calculate the total physical force applied to the phone
+        let magnitude = Math.sqrt(accX * accX + accY * accY + accZ * accZ);
+
+        // Deadzone: Ignore tiny hand jitters (values under 0.8)
+        if (magnitude > 0.8) {
+          // Add the physical acceleration to our current speed
+          let newSpeed = manualSpeedRef.current + (magnitude * 2.5); // Multiplier for feel
+          manualSpeedRef.current = Math.min(100, newSpeed); // Cap max speed at 100
+        }
+      });
+
     } catch (err) {
       console.error("Sensor permission error:", err);
       alert("Please allow sensor access for Live Mode.");
@@ -629,7 +654,7 @@ function App() {
                     </div>
                   )}
 
-                  <div className="space-y-3 mt-1">
+                  {/* <div className="space-y-3 mt-1">
                     <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
                       <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Simulated Speed (%)</div>
                       <div className="flex items-center justify-between gap-3">
@@ -643,7 +668,7 @@ function App() {
                       <div className="text-[10px] uppercase font-bold text-gray-500 mb-1">Rotational Heading (α)</div>
                       <div className="font-mono font-bold text-blue-600 text-2xl">{deviceHeading}°</div>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               )}
 
