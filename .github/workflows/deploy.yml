@@ -25,25 +25,34 @@ jobs:
 
     - name: Build & Push Frontend
       run: |
-        docker build -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
+        docker build \
+          --build-arg VITE_API_URL="https://stellar-route.me/api" \
+          -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
         docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-    - name: Deploy to EC2
+    - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # 1. Pull the latest images from Docker Hub
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
-          docker pull ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
-
-          # 2. Stop and remove old containers to prevent port/name conflicts
-          docker stop backend frontend redis || true
-          docker rm backend frontend redis || true
-
-          # 3. Start new containers
-          docker run -d -p 8000:8000 --name backend ${{ secrets.DOCKER_USERNAME }}/stellarroute-backend:latest
-          docker run -d -p 5173:5173 --name frontend ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
-          docker run -d -p 6379:6379 --name redis redis:alpine
+          cd ~/stellarroute
+          
+          # 1. Clear space BEFORE pulling (essential for 8GB EC2 instances)
+          docker system prune -f
+          
+          # 2. Pull and restart
+          docker compose pull
+          docker compose up -d --remove-orphans
+          
+          # 3. Health Check (now works because curl is in the Dockerfile)
+          echo "Waiting for services to initialize..."
+          sleep 15
+          if docker exec backend curl --fail http://localhost:8000/health; then
+            echo "✅ Deployment Successful"
+          else
+            echo "❌ Deployment Failed"
+            docker compose logs backend
+            exit 1
+          fi

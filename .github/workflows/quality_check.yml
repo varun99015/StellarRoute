@@ -86,7 +86,7 @@ jobs:
     - name: Wait for Backend
       run: |
         for i in {1..10}; do
-          if curl --fail "$BACKEND_URL/api/space-weather/current?latitude=12.97&longitude=77.59"; then
+          if curl --fail "$BACKEND_URL/space-weather/current?latitude=12.97&longitude=77.59"; then
             echo "Backend is up"
             exit 0
           fi

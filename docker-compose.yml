@@ -1,42 +1,47 @@
-
 services:
   # 1. The Database
   redis:
     image: redis:alpine
-    container_name: stellar-redis
+    container_name: redis  # Simplified name for internal DNS matching
     ports:
       - "6379:6379"
+    networks:
+      - stellar-net
     restart: unless-stopped
 
   # 2. The Python Backend
   backend:
     build: ./backend
-    container_name: stellar-backend
+    container_name: backend
     ports:
       - "8000:8000"
     env_file:
-    - ./backend/.env
+      - ./backend/.env
     environment:
-      # Docker's internal DNS routes 'redis' automatically to the container above!
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=your_super_secret_jwt_key_here
-      # Add your SMTP variables here if you want emails to work in Docker
-      # - SMTP_SERVER=smtp.gmail.com
-      # - EMAIL_ADDRESS=your_email@gmail.com
-      # - EMAIL_PASSWORD=your_app_password
+      # Use the container name 'redis' for internal communication
+      - REDIS_URL=redis://redis:6379 
     depends_on:
       - redis
+    networks:
+      - stellar-net
     restart: unless-stopped
 
-
-# 3. The React Frontend
+  # 3. The React Frontend
   frontend:
-    build: ./frontend
-    container_name: stellar-frontend
+    build:
+      context: ./frontend
+      args:
+        # Locally, point to your backend container or localhost
+        - VITE_API_URL=http://localhost:8000
+    container_name: frontend
     ports:
-      - "3000:80"   
-    environment:
-      - VITE_API_URL=http://localhost:8000
+      - "5173:80"
     depends_on:
       - backend
+    networks:
+      - stellar-net
     restart: unless-stopped
+
+networks:
+  stellar-net:
+    driver: bridge
