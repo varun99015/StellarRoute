@@ -74,6 +74,8 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL")
 active_connections: List[WebSocket] = []
+imu_connections: Dict[str, WebSocket] = {}
+map_connections: Dict[str, List[WebSocket]] = {}
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -482,6 +484,63 @@ async def simulate_gps_failure(simulation: GPSFailureSimulation):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.websocket("/ws/imu")
+async def imu_socket(websocket: WebSocket):
+    await websocket.accept()
+
+    client_id = websocket.query_params.get("client_id")
+
+    if not client_id:
+        await websocket.close()
+        return
+
+    imu_connections[client_id] = websocket
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+
+            # Forward to map clients safely
+            if client_id in map_connections:
+                dead_conns = []
+                for conn in map_connections[client_id]:
+                    try:
+                        await conn.send_text(data)
+                    except Exception:
+                        # If the connection closed while sending, mark it as dead
+                        dead_conns.append(conn)
+
+                # Clean up any disconnected clients so they don't crash the loop
+                for dead in dead_conns:
+                    if dead in map_connections[client_id]:
+                        map_connections[client_id].remove(dead)
+
+    except WebSocketDisconnect:
+        imu_connections.pop(client_id, None)
+
+
+@app.websocket("/ws/map")
+async def map_socket(websocket: WebSocket):
+    await websocket.accept()
+
+    client_id = websocket.query_params.get("client_id")
+
+    if not client_id:
+        await websocket.close()
+        return
+
+    if client_id not in map_connections:
+        map_connections[client_id] = []
+
+    map_connections[client_id].append(websocket)
+
+    try:
+        while True:
+            await asyncio.sleep(30)
+    except WebSocketDisconnect:
+        map_connections[client_id].remove(websocket)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
