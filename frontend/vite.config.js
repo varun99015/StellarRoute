@@ -16,7 +16,6 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
         },
       },
-      allowedHosts: true,
     },
   };
 });
