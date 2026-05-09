@@ -30,7 +30,7 @@ jobs:
           -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
         docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-    - name: Deploy to EC2
+    - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
@@ -38,19 +38,26 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd ~/stellarroute
-          # Pull the latest images we just pushed to Docker Hub
-          docker compose pull
           
-          # Restart the services using the compose file
-          # --remove-orphans cleans up any old manual 'docker run' containers
+          # 1. Pull the latest images built in previous steps
+          docker compose pull
+
+          # 2. Recreate containers with new code and environment variables
+          # --remove-orphans ensures old manual 'docker run' containers are killed
           docker compose up -d --remove-orphans
 
-    - name: Verify Deployment Health
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          sleep 10
-          curl --fail http://localhost:8000/health
+          # 3. Prune old images to save disk space on EC2
+          docker image prune -f
+
+          # 4. Deployment Verification (Health Check)
+          echo "Waiting for services to initialize..."
+          sleep 15
+          
+          # We check the backend directly inside the container to bypass Nginx
+          if docker exec backend curl --fail http://localhost:8000/health; then
+            echo "✅ Deployment Successful: Backend is responding."
+          else
+            echo "❌ Deployment Failed: Backend health check failed."
+            docker compose logs backend
+            exit 1
+          fi
