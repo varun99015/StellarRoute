@@ -39,25 +39,20 @@ jobs:
         script: |
           cd ~/stellarroute
           
-          # 1. Pull the latest images built in previous steps
+          # 1. Clear space BEFORE pulling (essential for 8GB EC2 instances)
+          docker system prune -f
+          
+          # 2. Pull and restart
           docker compose pull
-
-          # 2. Recreate containers with new code and environment variables
-          # --remove-orphans ensures old manual 'docker run' containers are killed
           docker compose up -d --remove-orphans
-
-          # 3. Prune old images to save disk space on EC2
-          docker image prune -f
-
-          # 4. Deployment Verification (Health Check)
+          
+          # 3. Health Check (now works because curl is in the Dockerfile)
           echo "Waiting for services to initialize..."
           sleep 15
-          
-          # We check the backend directly inside the container to bypass Nginx
           if docker exec backend curl --fail http://localhost:8000/health; then
-            echo "✅ Deployment Successful: Backend is responding."
+            echo "✅ Deployment Successful"
           else
-            echo "❌ Deployment Failed: Backend health check failed."
+            echo "❌ Deployment Failed"
             docker compose logs backend
             exit 1
           fi
