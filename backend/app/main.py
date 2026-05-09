@@ -49,6 +49,10 @@ from .services.risk_service import RiskAssessmentService
 from .services.routing_service import RoadNetworkRouter
 from .services.simulation import StormSimulator
 
+from prometheus_client import Counter, Histogram, generate_latest
+from fastapi.responses import Response as FastAPIResponse
+import time as time_module
+
 # --- CONFIGURATION ---
 
 load_dotenv()
@@ -82,6 +86,19 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "http_requests_total", "Total HTTP requests", ["method", "endpoint", "status"]
+)
+REQUEST_LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["method", "endpoint"],
+)
+ERROR_COUNT = Counter(
+    "http_errors_total", "Total HTTP errors (5xx)", ["method", "endpoint"]
+)
+
 origins = [FRONTEND_URL]
 
 app.add_middleware(
@@ -91,6 +108,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    start_time = time_module.time()
+    response = await call_next(request)
+    elapsed = time_module.time() - start_time
+
+    endpoint = request.url.path
+
+    REQUEST_COUNT.labels(
+        method=request.method, endpoint=endpoint, status=response.status_code
+    ).inc()
+
+    REQUEST_LATENCY.labels(method=request.method, endpoint=endpoint).observe(elapsed)
+
+    if response.status_code >= 500:
+        ERROR_COUNT.labels(method=request.method, endpoint=endpoint).inc()
+
+    return response
+
 
 noaa_service = NOAAWeatherService()
 risk_service = RiskAssessmentService()
@@ -213,6 +251,19 @@ def create_session_jwt(email: str) -> str:
     tags=["Authentication"],
 )
 async def request_otp(request: EmailRequest):
+    # --- Rate limit: 5 requests per minute per email ---
+    rate_key = f"rate:otp:{request.email}"
+    current = await redis_client.incr(rate_key)
+    if current == 1:
+        await redis_client.expire(rate_key, 60)
+    if current > 5:
+        logger.warning(f"OTP rate limit exceeded for {request.email}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many OTP requests. Please wait a minute and try again.",
+        )
+    # --- end rate limit ---
+
     otp_code = generate_otp()
     if not send_email_otp(request.email, otp_code):
         raise HTTPException(
@@ -515,6 +566,11 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         if websocket in active_connections:
             active_connections.remove(websocket)
+
+
+@app.get("/metrics")
+async def metrics():
+    return FastAPIResponse(content=generate_latest(), media_type="text/plain")
 
 
 # --- STARTUP / SHUTDOWN ---

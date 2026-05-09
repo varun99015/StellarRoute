@@ -44,3 +44,13 @@ jobs:
           # Restart the services using the compose file
           # --remove-orphans cleans up any old manual 'docker run' containers
           docker compose up -d --remove-orphans
+
+    - name: Verify Deployment Health
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        script: |
+          sleep 10
+          curl --fail http://localhost:8000/health
