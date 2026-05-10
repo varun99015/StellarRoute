@@ -76,40 +76,47 @@ class NOAAWeatherService:
             kp_data = await self.fetch_kp_index()
             solar_wind_data = await self.fetch_solar_wind()
 
-            # Get latest Kp value
-            if kp_data and len(kp_data) > 1:
-                latest_kp = float(kp_data[-1][1]) if kp_data[-1][1] else 2.0
-            else:
-                latest_kp = 2.0
+            # Safety check: Ensure data exists and is a list
+            latest_kp = 2.0
+            if isinstance(kp_data, list) and len(kp_data) > 1:
+                # NOAA JSONs often have headers at index 0. Get the last data row.
+                last_entry = kp_data[-1]
+                if len(last_entry) > 1:
+                    try:
+                        latest_kp = float(last_entry[1])
+                    except (ValueError, TypeError, IndexError):
+                        # Fallback to previous row if latest is malformed
+                        latest_kp = float(kp_data[-2][1]) if len(kp_data) > 2 else 2.0
 
-            # Get solar wind speed
-            solar_wind_speed = None
-            if solar_wind_data and len(solar_wind_data) > 1:
-                try:
-                    solar_wind_speed = float(solar_wind_data[-1][1])
-                except:
-                    solar_wind_speed = 400.0
+            solar_wind_speed = 400.0
+            if isinstance(solar_wind_data, list) and len(solar_wind_data) > 1:
+                last_wind = solar_wind_data[-1]
+                if len(last_wind) > 1:
+                    try:
+                        solar_wind_speed = float(last_wind[1])
+                    except (ValueError, TypeError, IndexError):
+                        solar_wind_speed = 400.0
 
+            # FIX: Use keyword arguments to avoid BaseModel positional arg error
             return SpaceWeatherData(
                 timestamp=datetime.utcnow(),
                 kp_index=latest_kp,
                 solar_wind_speed=solar_wind_speed,
                 solar_wind_density=None,
-                risk_level=RiskLevel.LOW,  # Will be calculated by risk service
+                risk_level=RiskLevel.LOW,
                 estimated_gps_error_m=(5, 15),
                 alerts=[],
-                source="NOAA",
+                source="NOAA"
             )
         except Exception as e:
             logger.error(f"Error getting space weather: {e}")
-            # Return default data
+            # Fallback with explicit keyword arguments
             return SpaceWeatherData(
                 timestamp=datetime.utcnow(),
                 kp_index=2.0,
                 solar_wind_speed=400.0,
-                solar_wind_density=5.0,
                 risk_level=RiskLevel.LOW,
                 estimated_gps_error_m=(5, 15),
-                alerts=["Using simulated data - NOAA API failed"],
-                source="SIMULATION",
+                alerts=["Data fetch failed"],
+                source="FALLBACK"
             )

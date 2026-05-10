@@ -26,6 +26,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 # import centralized settings
 from .config import settings
@@ -104,11 +105,7 @@ ERROR_COUNT = Counter(
 origins = [FRONTEND_URL]
 
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,  # was hardcoded list
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    TrustedHostMiddleware, allowed_hosts=["stellar-route.me", "localhost"]
 )
 
 
