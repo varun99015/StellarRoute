@@ -22,9 +22,11 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "app.main:app",
-        host=settings.HOST,  # from config
-        port=settings.PORT,  # from config
-        reload=settings.DEBUG,  # from config (optional)
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
         log_level="info",
         access_log=True,
+        proxy_headers=True,  # ← ADD THIS
+        forwarded_allow_ips="*",  # ← ADD THIS (or set to your nginx container IP)
     )

@@ -44,3 +44,10 @@ class Settings:
 
 
 settings = Settings()
+
+# Security validation – must be done after settings is instantiated
+if (
+    settings.SECRET_KEY == "a-default-secret-key-that-must-be-changed"
+    or len(settings.SECRET_KEY) < 16
+):
+    raise ValueError("SECRET_KEY is insecure! Set a strong secret in the environment.")

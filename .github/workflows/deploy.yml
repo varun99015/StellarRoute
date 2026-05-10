@@ -30,7 +30,7 @@ jobs:
           -t ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest ./frontend
         docker push ${{ secrets.DOCKER_USERNAME }}/stellarroute-frontend:latest
 
-    - name: Deploy to EC2
+    - name: Deploy to EC2 via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
@@ -38,9 +38,21 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
           cd ~/stellarroute
-          # Pull the latest images we just pushed to Docker Hub
-          docker compose pull
           
-          # Restart the services using the compose file
-          # --remove-orphans cleans up any old manual 'docker run' containers
+          # 1. Clear space BEFORE pulling (essential for 8GB EC2 instances)
+          docker system prune -f
+          
+          # 2. Pull and restart
+          docker compose pull
           docker compose up -d --remove-orphans
+          
+          # 3. Health Check (now works because curl is in the Dockerfile)
+          echo "Waiting for services to initialize..."
+          sleep 15
+          if docker exec backend curl --fail http://localhost:8000/health; then
+            echo "✅ Deployment Successful"
+          else
+            echo "❌ Deployment Failed"
+            docker compose logs backend
+            exit 1
+          fi

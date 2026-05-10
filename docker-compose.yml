@@ -2,7 +2,7 @@ services:
   # 1. The Database
   redis:
     image: redis:alpine
-    container_name: redis  # Simplified name for internal DNS matching
+    container_name: redis
     ports:
       - "6379:6379"
     networks:
@@ -18,8 +18,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # Use the container name 'redis' for internal communication
-      - REDIS_URL=redis://redis:6379 
+      - REDIS_URL=redis://redis:6379
     depends_on:
       - redis
     networks:
@@ -31,13 +30,42 @@ services:
     build:
       context: ./frontend
       args:
-        # Locally, point to your backend container or localhost
         - VITE_API_URL=http://localhost:8000
     container_name: frontend
     ports:
       - "5173:80"
     depends_on:
       - backend
+    networks:
+      - stellar-net
+    restart: unless-stopped
+
+  # 4. Prometheus
+  prometheus:
+      image: prom/prometheus:latest
+      container_name: prometheus
+      volumes:
+        - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      ports:
+        - "9090:9090"
+      # REMOVE: extra_hosts is no longer needed since we are using container DNS
+      command:
+        - '--config.file=/etc/prometheus/prometheus.yml'
+        - '--storage.tsdb.path=/prometheus'
+      networks:
+        - stellar-net  # MUST match the backend network
+      restart: unless-stopped
+
+  # 5. Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
     networks:
       - stellar-net
     restart: unless-stopped
