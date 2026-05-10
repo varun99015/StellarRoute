@@ -11,7 +11,7 @@
 ## 💡 Our Solution
 StellarRoute provides **three layers of protection**:
 
-### 1️⃣ Predictive Risk Mapping
+### 1️⃣ Risk Mapping
 - Fetches real-time space weather data from **NOAA/NASA**.
 - Converts Kp-index, solar wind, and geomagnetic data into GPS error estimates.
 - Generates live risk heatmaps showing areas of GPS degradation.
