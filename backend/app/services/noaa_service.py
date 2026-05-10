@@ -106,7 +106,7 @@ class NOAAWeatherService:
                 risk_level=RiskLevel.LOW,
                 estimated_gps_error_m=(5, 15),
                 alerts=[],
-                source="NOAA"
+                source="NOAA",
             )
         except Exception as e:
             logger.error(f"Error getting space weather: {e}")
@@ -118,5 +118,5 @@ class NOAAWeatherService:
                 risk_level=RiskLevel.LOW,
                 estimated_gps_error_m=(5, 15),
                 alerts=["Data fetch failed"],
-                source="FALLBACK"
+                source="FALLBACK",
             )
