@@ -102,11 +102,20 @@ ERROR_COUNT = Counter(
     "http_errors_total", "Total HTTP errors (5xx)", ["method", "endpoint"]
 )
 
-origins = [FRONTEND_URL]
+origins = [
+    "http://localhost:5173",
+    "https://stellar-route.me",
+]
 
 app.add_middleware(
-    TrustedHostMiddleware, allowed_hosts=["stellar-route.me", "localhost"]
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 
 @app.middleware("http")

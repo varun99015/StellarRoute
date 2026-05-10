@@ -60,6 +60,70 @@ function App() {
   const imuNavigatorRef = useRef(null)
   const lastPositionRef = useRef(null)
 
+  useEffect(() => {
+    if (!imuEnabled) return;
+
+    const handleOrientation = (e) => {
+      let heading = 0;
+
+      if (e.webkitCompassHeading != null) {
+        heading = e.webkitCompassHeading;
+      } else if (e.alpha != null) {
+        heading = 360 - e.alpha;
+      }
+
+      heading = (heading + 360) % 360;
+
+      headingRef.current = heading;
+      setDeviceHeading(Math.round(heading));
+    };
+
+    const handleMotion = (e) => {
+      const acc = e.accelerationIncludingGravity;
+
+      if (!acc) return;
+
+      const x = acc.x || 0;
+      const y = acc.y || 0;
+      const z = acc.z || 0;
+
+      const magnitude = Math.sqrt(x * x + y * y + z * z);
+
+      if (magnitude > 1.2) {
+        manualSpeedRef.current = Math.min(
+          40,
+          manualSpeedRef.current + magnitude * 0.5
+        );
+      }
+    };
+
+    window.addEventListener(
+      "deviceorientation",
+      handleOrientation,
+      true
+    );
+
+    window.addEventListener(
+      "devicemotion",
+      handleMotion,
+      true
+    );
+
+    return () => {
+      window.removeEventListener(
+        "deviceorientation",
+        handleOrientation,
+        true
+      );
+
+      window.removeEventListener(
+        "devicemotion",
+        handleMotion,
+        true
+      );
+    };
+  }, [imuEnabled]);
+
   // --- PERSISTENCE EFFECT ---
   useEffect(() => {
     const verifySession = async () => {
@@ -88,12 +152,21 @@ function App() {
   useEffect(() => {
     if (!realTimeMode) return;
 
-    const userId = "test123";
-    localStorage.setItem("client_id", userId);
+    let userId = localStorage.getItem("client_id");
 
-    // Dynamically get API WS URL based on env or hostname
-    const apiBase = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
-    const wsBaseUrl = apiBase.replace(/^http/, 'ws');
+    if (!userId) {
+      userId = crypto.randomUUID();
+      localStorage.setItem("client_id", userId);
+    }
+
+    const wsProtocol =
+      window.location.protocol === "https:"
+        ? "wss"
+        : "ws";
+
+    const wsBaseUrl =
+      import.meta.env.VITE_WS_URL ||
+      `${wsProtocol}://${window.location.host}`;
 
     // 1. Map Receiver (Receives position updates)
     const mapWs = new WebSocket(`${wsBaseUrl}/ws/map?client_id=${userId}`);
@@ -169,37 +242,6 @@ function App() {
         await DeviceOrientationEvent.requestPermission();
       }
       setImuEnabled(true);
-
-      // 1. Start reading orientation (Compass)
-      window.addEventListener("deviceorientation", e => {
-        let correctedHeading;
-        if (e.webkitCompassHeading !== undefined) {
-          correctedHeading = Math.round(e.webkitCompassHeading);
-        } else {
-          correctedHeading = Math.round(360 - (e.alpha || 0)) % 360;
-        }
-        headingRef.current = correctedHeading;
-        setDeviceHeading(correctedHeading);
-      });
-
-      // 2. Start reading motion (Accelerometer -> Speed)
-      window.addEventListener("devicemotion", e => {
-        // Get linear acceleration (excluding gravity)
-        let accX = e.acceleration?.x || 0;
-        let accY = e.acceleration?.y || 0;
-        let accZ = e.acceleration?.z || 0;
-
-        // Calculate the total physical force applied to the phone
-        let magnitude = Math.sqrt(accX * accX + accY * accY + accZ * accZ);
-
-        // Deadzone: Ignore tiny hand jitters (values under 1.0)
-        if (magnitude > 1.0) {
-          // Add the physical acceleration to our current speed
-          let newSpeed = manualSpeedRef.current + (magnitude * 0.6); // Multiplier for feel
-          manualSpeedRef.current = Math.min(40, newSpeed); // Cap max speed at 40
-        }
-      });
-
     } catch (err) {
       console.error("Sensor permission error:", err);
       alert("Please allow sensor access for Live Mode.");
