@@ -93,12 +93,7 @@ function App() {
 
     // Dynamically get API WS URL based on env or hostname
     const apiBase = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
-    // Replace your existing wsBaseUrl logic with this:
-    // frontend/src/App.jsx (Line 104)
-
-    const wsBaseUrl = window.location.protocol === 'https:' 
-        ? `wss://${window.location.host}` // Remove the extra /ws here
-        : `ws://${window.location.host}`; // Nginx handles the /ws path
+    const wsBaseUrl = apiBase.replace(/^http/, 'ws');
 
     // 1. Map Receiver (Receives position updates)
     const mapWs = new WebSocket(`${wsBaseUrl}/ws/map?client_id=${userId}`);
