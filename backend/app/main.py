@@ -105,7 +105,8 @@ ERROR_COUNT = Counter(
 origins = [FRONTEND_URL]
 
 app.add_middleware(
-    TrustedHostMiddleware, allowed_hosts=["stellar-route.me", "localhost", "*.compute.amazonaws.com"]
+    TrustedHostMiddleware,
+    allowed_hosts=["stellar-route.me", "localhost", "*.compute.amazonaws.com"],
 )
 
 
