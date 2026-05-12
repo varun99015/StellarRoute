@@ -108,6 +108,7 @@ origins = [
     "http://localhost:5173",
     "https://stellar-route.me",
     "https://www.stellar-route.me",
+    "https://api.stellar-route.me",
 ]
 
 app.add_middleware(
@@ -118,13 +119,18 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Client-ID"],
 )
 
+allowed_hosts = [
+    "localhost",
+    "127.0.0.1",
+    "*.localhost",
+    "stellar-route.me",
+    "www.stellar-route.me",
+    "api.stellar-route.me",
+]
+
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=[
-        "stellar-route.me",
-        "www.stellar-route.me",
-        "api.stellar-route.me",
-    ],
+    allowed_hosts=allowed_hosts,
 )
 
 if ENV == "production":
