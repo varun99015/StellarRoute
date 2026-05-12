@@ -64,6 +64,7 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 SESSION_EXPIRY_SECONDS = settings.SESSION_EXPIRY_SECONDS
 REDIS_URL = settings.REDIS_URL
+ENV = os.getenv("ENV", "development")
 
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
@@ -126,7 +127,8 @@ app.add_middleware(
     ],
 )
 
-app.add_middleware(HTTPSRedirectMiddleware)
+if ENV == "production":
+    app.add_middleware(HTTPSRedirectMiddleware)
 
 
 @app.middleware("http")
