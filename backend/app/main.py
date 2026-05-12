@@ -53,6 +53,7 @@ from .services.simulation import StormSimulator
 from prometheus_client import Counter, Histogram, generate_latest
 from fastapi.responses import Response as FastAPIResponse
 import time as time_module
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 
 # --- CONFIGURATION ---
 
@@ -105,17 +106,27 @@ ERROR_COUNT = Counter(
 origins = [
     "http://localhost:5173",
     "https://stellar-route.me",
+    "https://www.stellar-route.me",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-Client-ID"],
 )
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=[
+        "stellar-route.me",
+        "www.stellar-route.me",
+        "api.stellar-route.me",
+    ],
+)
+
+app.add_middleware(HTTPSRedirectMiddleware)
 
 
 @app.middleware("http")

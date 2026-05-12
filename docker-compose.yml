@@ -30,8 +30,9 @@ services:
     build:
       context: ./frontend
       args:
-        - VITE_API_URL=https://stellar-route.me
-        - VITE_WS_URL=wss://stellar-route.me
+        - VITE_API_URL=https://api.stellar-route.me
+        - VITE_WS_URL=wss://api.stellar-route.me
+
     container_name: frontend
     ports:
       - "5173:80"
