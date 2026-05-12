@@ -93,10 +93,10 @@ function App() {
 
     // Dynamically get API WS URL based on env or hostname
     const apiBase = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`;
-    const wsBaseUrl = apiBase.replace(/^http/, 'ws');
+    const wsBaseUrl = apiBase.replace(/^http/, 'ws').replace(/\/api$/, '');
 
-    // 1. Map Receiver (Receives position updates)
     const mapWs = new WebSocket(`${wsBaseUrl}/ws/map?client_id=${userId}`);
+    const imuWs = new WebSocket(`${wsBaseUrl}/ws/imu?client_id=${userId}`);
 
     mapWs.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -115,7 +115,6 @@ function App() {
     };
 
     // 2. IMU Sender (Broadcasts our local sensor data)
-    const imuWs = new WebSocket(`${wsBaseUrl}/ws/imu?client_id=${userId}`);
 
     const sensorInterval = setInterval(() => {
       // --- APPLY FRICTION (Upgraded) ---
