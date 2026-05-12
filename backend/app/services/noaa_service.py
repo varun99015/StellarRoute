@@ -71,22 +71,19 @@ class NOAAWeatherService:
         return simulated_data
 
     async def get_current_space_weather(self) -> SpaceWeatherData:
-        """Get current space weather conditions"""
         try:
             kp_data = await self.fetch_kp_index()
             solar_wind_data = await self.fetch_solar_wind()
 
-            # Safety check: Ensure data exists and is a list
             latest_kp = 2.0
+            # skip header row (index 0)
             if isinstance(kp_data, list) and len(kp_data) > 1:
-                # NOAA JSONs often have headers at index 0. Get the last data row.
                 last_entry = kp_data[-1]
                 if len(last_entry) > 1:
                     try:
                         latest_kp = float(last_entry[1])
-                    except (ValueError, TypeError, IndexError):
-                        # Fallback to previous row if latest is malformed
-                        latest_kp = float(kp_data[-2][1]) if len(kp_data) > 2 else 2.0
+                    except (ValueError, TypeError):
+                        latest_kp = 2.0
 
             solar_wind_speed = 400.0
             if isinstance(solar_wind_data, list) and len(solar_wind_data) > 1:
@@ -94,15 +91,14 @@ class NOAAWeatherService:
                 if len(last_wind) > 1:
                     try:
                         solar_wind_speed = float(last_wind[1])
-                    except (ValueError, TypeError, IndexError):
+                    except (ValueError, TypeError):
                         solar_wind_speed = 400.0
 
-            # FIX: Use keyword arguments to avoid BaseModel positional arg error
+            # CRITICAL: Use named arguments to fix BaseModel error
             return SpaceWeatherData(
                 timestamp=datetime.utcnow(),
                 kp_index=latest_kp,
                 solar_wind_speed=solar_wind_speed,
-                solar_wind_density=None,
                 risk_level=RiskLevel.LOW,
                 estimated_gps_error_m=(5, 15),
                 alerts=[],
@@ -110,7 +106,6 @@ class NOAAWeatherService:
             )
         except Exception as e:
             logger.error(f"Error getting space weather: {e}")
-            # Fallback with explicit keyword arguments
             return SpaceWeatherData(
                 timestamp=datetime.utcnow(),
                 kp_index=2.0,
